@@ -1,0 +1,75 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+import numpy as np
+
+class muParameter(nn.Module):
+  def __init__(self, in_features, out_features, model = False ):
+      super().__init__()
+
+      if model == False:
+        self.weight = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features, in_features) ), dtype=torch.float64 ) )
+        self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (in_features              ) ), dtype=torch.float64 ) )
+
+      else:
+        self.weight = nn.Parameter( model.weight )
+        self.bias   = nn.Parameter( model.bias   )
+
+
+class rhoParameter(nn.Module):
+  def __init__(self, in_features, out_features, model = False ):
+      super().__init__()
+
+      if model == False:
+        self.weight = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (out_features, in_features) ), dtype=torch.float64 ) )
+        self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (in_features              ) ), dtype=torch.float64 ) )
+
+      else:
+        self.weight = nn.Parameter( model.weight )
+        self.bias   = nn.Parameter( model.bias   )
+        
+class LinearBayesianGaussian(nn.Module):
+
+    def __init__(self, in_features, out_features):
+        super().__init__()
+
+        self.mu  = muParameter(in_features, out_features)
+        self.rho = rhoParameter(in_features, out_features)
+
+
+
+
+class torchnet(nn.Module):
+
+  ##########################################
+  # Initialize the model
+  ##########################################
+
+  def __init__(self, L, dim, model = False ):
+
+    super(torchnet, self).__init__()
+
+    self.L    = L
+    self.dim  = dim
+
+    self.mu_weight  = nn.ModuleList()
+    self.mu_bias    = nn.ModuleList()
+
+    self.rho_weight = nn.ModuleList()
+    self.rho_bias   = nn.ModuleList()
+
+
+    if model == False:
+
+      for i in range(0, self.L-1):
+        mu_i_weight  = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/dim[i]), +np.sqrt(1/dim[i]), (dim[i+1], dim[i]) ), dtype=torch.float64 ) )
+        rho_i_weight = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (dim[i+1], dim[i])                                 ), dtype=torch.float64 ) )
+
+        mu_i_bias  = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/dim[i]), +np.sqrt(1/dim[i]), (dim[i+1]) ), dtype=torch.float64 ) )
+        rho_i_bias = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (dim[i+1])                                 ), dtype=torch.float64 ) )
+
+        self.mu_weight.append(mu_i_weight)
+        self.mu_bias.append(mu_i_bias)
+
+        self.rho.append(rho_i)
