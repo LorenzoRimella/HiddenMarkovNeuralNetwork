@@ -4,7 +4,9 @@ import torch.nn.functional as F
 
 import numpy as np
 
-
+####################################################################################
+# Define some class for the parameters mu and rho (transformation of sigma)
+####################################################################################
 
 class muParameter(nn.Module):
 
@@ -34,7 +36,9 @@ class rhoParameter(nn.Module):
             self.weight = nn.Parameter( rhoParameter_init.weight )
             self.bias   = nn.Parameter( rhoParameter_init.bias   )
 
-
+##############################################################################################
+# Define a new nn.Linear from a Bayesian point of view which allows an automated reparam trick
+##############################################################################################
 
 class LinearBayesianGaussian(nn.Module):
 
@@ -51,26 +55,24 @@ class LinearBayesianGaussian(nn.Module):
 
     def forward(self, input):
 
-        sigma_weight  = torch.log1p(torch.exp(self.rho.weight))
-        self.w_weight = self.mu.weight + sigma_weight * torch.distributions.Normal(0,1).sample( self.mu.weight.size() )
+        sigma_weight   = torch.log1p(torch.exp(self.rho.weight))
+        epsilon_weight = torch.distributions.Normal(0,1).sample( self.mu.weight.size() )
+        w_weight       = self.mu.weight + sigma_weight * epsilon_weight
 
-        sigma_bias  = torch.log1p(torch.exp(self.rho.bias))
-        self.w_bias = self.mu.bias + sigma_bias * torch.distributions.Normal(0,1).sample( self.mu.bias.size() )
+        sigma_bias   = torch.log1p(torch.exp(self.rho.bias))
+        epsilon_bias = torch.distributions.Normal(0,1).sample( self.mu.bias.size() )
+        w_bias       = self.mu.bias + sigma_bias * epsilon_bias
 
-        return 0
+        return F.linear(input, w_weight, w_bias)
 
 
 
 
 class torchnet(nn.Module):
 
-  ##########################################
-  # Initialize the model
-  ##########################################
-
   def __init__(self, L, dim, model = False ):
 
-    super(torchnet, self).__init__()
+    super().__init__()
 
     self.L    = L
     self.dim  = dim

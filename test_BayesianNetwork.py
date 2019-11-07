@@ -64,18 +64,34 @@ def test_Linear_w_values():
     Linear1      = LinearBayesianGaussian(10, 100)
 
     with torch.no_grad():
-        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 5.5, +6, (100, 10) ), dtype=torch.float64 ) )
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 1, 1, (100, 10) ), dtype=torch.float64 ) )
 
-    output = Linear1( torch.tensor( np.random.uniform( 0, 1, (10) ), dtype=torch.float64 ) )
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (10) ), dtype=torch.float64 ) )
 
-    print(Linear1.w_weight)
-
-
-    assert False
+    assert ( output.data.numpy() > 9 ).all() and ( output.data.numpy() < 11 ).all()
 
 
 
+def test_Linear_reparam_trick():
 
+    Linear1      = LinearBayesianGaussian(10, 100)
+
+    with torch.no_grad():
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype=torch.float64 ) )
+        #Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( 0, 1, (100, 10) ), dtype=torch.float64 ) )
+
+    output = Linear1( torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
+
+    loss   = output.sum() + (Linear1.mu.weight*Linear1.mu.weight).sum()
+    loss.backward()
+
+    # The derivative of a composition of function in this case is given by all 0 because the inputs are 0
+    # The reparam trick add to this derivative the derivative of the loss function wrt mu that is in this case
+    # given by all 2*2 (all the mu are 2 and then derive a square function)
+    #
+    # print(Linear1.mu.weight.grad)
+
+    assert (Linear1.mu.weight.grad.data.numpy() == 4).all()
 
 
 
