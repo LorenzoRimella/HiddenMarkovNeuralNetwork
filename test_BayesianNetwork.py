@@ -26,7 +26,12 @@ def test_mu_with_initial():
     mu_prev = muParameter(10, 100)
     mu      = muParameter(10, 100, mu_prev)
 
-    assert ( mu.weight.data.numpy() == mu_prev.weight.data.numpy() ).all()
+    check1 = ( mu.weight.data.numpy() == mu_prev.weight.data.numpy() ).all()
+
+    mu.weight.data = mu.weight.data + 2
+    check2 = ( mu.weight.data.numpy() != mu_prev.weight.data.numpy() ).all()
+
+    assert (check1 and check2)
 
 
 
@@ -95,6 +100,28 @@ def test_Linear_reparam_trick():
 
 
 
+def test_Linear_multi_input():
+
+    Linear1      = LinearBayesianGaussian(10, 10)
+
+    with torch.no_grad():
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (10, 10) ), dtype=torch.float64 ) )
+        Linear1.mu.bias.copy_( torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
+        #Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( 0, 1, (100, 10) ), dtype=torch.float64 ) )
+
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (10, 10) ), dtype=torch.float64 ) )
+
+    #print( (output.data.numpy()[0, :] == output.data.numpy()).all() )
+
+    # The derivative of a composition of function in this case is given by all 0 because the inputs are 0
+    # The reparam trick add to this derivative the derivative of the loss function wrt mu that is in this case
+    # given by all 2*2 (all the mu are 2 and then derive a square function)
+    #
+    # print(Linear1.mu.weight.grad)
+
+    assert (output.data.numpy()[0, :] == output.data.numpy()).all()
+
+
 # Test the BayesianNetwork
 
 def test_BayesianNetwork_without_initial():
@@ -106,9 +133,51 @@ def test_BayesianNetwork_without_initial():
     # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
     # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
 
-    assert (BayesianNetwork1.Linear_layer[0].mu.weight.shape[0] == 30 and BayesianNetwork1.Linear_layer[0].mu.weight.shape[1] == 10 and BayesianNetwork1.Linear_layer[1].rho.bias.shape[0] == 100)
+    assert (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy().shape[0] == 30 and
+            BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy().shape[1] == 10 and
+            BayesianNetwork1.Linear_layer[1].rho.bias.data.numpy().shape[0] == 100)
 
 
+
+def test_BayesianNetwork_with_initial():
+
+    dim   = np.array([10, 30, 100])
+
+    BayesianNetwork1_prev = BayesianNetwork(dim)
+    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
+
+    check1 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
+
+    new_weights = torch.tensor( BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() + 2 )
+    BayesianNetwork1.Linear_layer[0].mu.weight.data = new_weights
+    check2 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() !=  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
+
+    # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
+    # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
+
+    assert ( check1 and check2)
+
+
+
+# def test_BayesianNetwork_input():
+#
+#     dim   = np.array([10, 30, 100])
+#
+#     BayesianNetwork1_prev = BayesianNetwork(dim)
+#     BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
+#
+#     x                = torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
+#
+#     check1 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
+#
+#     new_weights = torch.tensor( BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() + 2 )
+#     BayesianNetwork1.Linear_layer[0].mu.weight.data = new_weights
+#     check2 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() !=  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
+#
+#     # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
+#     # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
+#
+#     assert ( check1 and check2)
 
 
 

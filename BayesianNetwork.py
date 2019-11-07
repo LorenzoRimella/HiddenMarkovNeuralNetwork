@@ -18,8 +18,8 @@ class muParameter(nn.Module):
             self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
 
         else:
-            self.weight = nn.Parameter( muParameter_init.weight )
-            self.bias   = nn.Parameter( muParameter_init.bias   )
+            self.weight = nn.Parameter( muParameter_init.weight.data )
+            self.bias   = nn.Parameter( muParameter_init.bias.data   )
 
 
 
@@ -33,8 +33,8 @@ class rhoParameter(nn.Module):
             self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features              ) ), dtype=torch.float64 ) )
 
         else:
-            self.weight = nn.Parameter( rhoParameter_init.weight )
-            self.bias   = nn.Parameter( rhoParameter_init.bias   )
+            self.weight = nn.Parameter( rhoParameter_init.weight.data )
+            self.bias   = nn.Parameter( rhoParameter_init.bias.data   )
 
 ##############################################################################################
 # Define a new nn.Linear from a Bayesian point of view which allows an automated reparam trick
@@ -52,6 +52,7 @@ class LinearBayesianGaussian(nn.Module):
         else:
             self.mu  = muParameter( in_features, out_features, LinearBayesianGaussian_init.mu )
             self.rho = rhoParameter(in_features, out_features, LinearBayesianGaussian_init.rho)
+
 
     def forward(self, input):
 
@@ -79,8 +80,24 @@ class BayesianNetwork(nn.Module):
 
         self.Linear_layer  = nn.ModuleList()
 
-
         if BayesianNetwork_init == False:
 
             for layer in range(self.depth-1):
                 self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1]) )
+
+        else:
+            for layer in range(self.depth-1):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], BayesianNetwork_init.Linear_layer[layer]) )
+
+
+    def forward(self, x):
+
+        hidden = x
+
+        for layer in range(self.depth-2):
+            hidden = self.Linear_layer[layer](hidden)
+            hidden = F.relu(hidden)
+
+        output = self.Linear_layer[layer+1](hidden)
+
+        return output
