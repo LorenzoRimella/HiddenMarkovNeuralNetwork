@@ -102,14 +102,14 @@ def test_Linear_reparam_trick():
 
 def test_Linear_multi_input():
 
-    Linear1      = LinearBayesianGaussian(10, 10)
+    Linear1      = LinearBayesianGaussian(10, 1)
 
     with torch.no_grad():
-        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (10, 10) ), dtype=torch.float64 ) )
-        Linear1.mu.bias.copy_( torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (1, 10) ), dtype=torch.float64 ) )
+        Linear1.mu.bias.copy_( torch.tensor( np.random.uniform( 0, 0, (1) ), dtype=torch.float64 ) )
         #Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( 0, 1, (100, 10) ), dtype=torch.float64 ) )
 
-    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (10, 10) ), dtype=torch.float64 ) )
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (20, 10) ), dtype=torch.float64 ) )
 
     #print( (output.data.numpy()[0, :] == output.data.numpy()).all() )
 
@@ -119,7 +119,7 @@ def test_Linear_multi_input():
     #
     # print(Linear1.mu.weight.grad)
 
-    assert (output.data.numpy()[0, :] == output.data.numpy()).all()
+    assert ( (output.data.numpy()[0, :] == output.data.numpy()).all() and output.data.numpy().shape[0] == 20 )
 
 
 # Test the BayesianNetwork
@@ -158,7 +158,7 @@ def test_BayesianNetwork_with_initial():
     assert ( check1 and check2)
 
 
-
+#
 # def test_BayesianNetwork_input():
 #
 #     dim   = np.array([10, 30, 100])
