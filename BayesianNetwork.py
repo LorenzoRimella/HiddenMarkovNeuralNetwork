@@ -68,32 +68,19 @@ class LinearBayesianGaussian(nn.Module):
 
 
 
-class torchnet(nn.Module):
+class BayesianNetwork(nn.Module):
 
-  def __init__(self, L, dim, model = False ):
+    def __init__(self, architecture, BayesianNetwork_init = False ):
 
-    super().__init__()
+        super().__init__()
 
-    self.L    = L
-    self.dim  = dim
+        self.architecture  = architecture
+        self.depth         = self.architecture.shape[0]
 
-    self.mu_weight  = nn.ModuleList()
-    self.mu_bias    = nn.ModuleList()
-
-    self.rho_weight = nn.ModuleList()
-    self.rho_bias   = nn.ModuleList()
+        self.Linear_layer  = nn.ModuleList()
 
 
-    if model == False:
+        if BayesianNetwork_init == False:
 
-      for i in range(0, self.L-1):
-        mu_i_weight  = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/dim[i]), +np.sqrt(1/dim[i]), (dim[i+1], dim[i]) ), dtype=torch.float64 ) )
-        rho_i_weight = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (dim[i+1], dim[i])                                 ), dtype=torch.float64 ) )
-
-        mu_i_bias  = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/dim[i]), +np.sqrt(1/dim[i]), (dim[i+1]) ), dtype=torch.float64 ) )
-        rho_i_bias = nn.Parameter( torch.tensor( np.random.uniform( -4, +5, (dim[i+1])                                 ), dtype=torch.float64 ) )
-
-        self.mu_weight.append(mu_i_weight)
-        self.mu_bias.append(mu_i_bias)
-
-        self.rho.append(rho_i)
+            for layer in range(self.depth-1):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1]) )

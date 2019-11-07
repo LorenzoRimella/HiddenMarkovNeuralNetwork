@@ -1,4 +1,4 @@
-from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian
+from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian, BayesianNetwork
 
 import torch
 import numpy as np
@@ -92,6 +92,21 @@ def test_Linear_reparam_trick():
     # print(Linear1.mu.weight.grad)
 
     assert (Linear1.mu.weight.grad.data.numpy() == 4).all()
+
+
+
+# Test the BayesianNetwork
+
+def test_BayesianNetwork_without_initial():
+
+    dim   = np.array([10, 30, 100])
+
+    BayesianNetwork1 = BayesianNetwork(dim)
+
+    # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
+    # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
+
+    assert (BayesianNetwork1.Linear_layer[0].mu.weight.shape[0] == 30 and BayesianNetwork1.Linear_layer[0].mu.weight.shape[1] == 10 and BayesianNetwork1.Linear_layer[1].rho.bias.shape[0] == 100)
 
 
 
