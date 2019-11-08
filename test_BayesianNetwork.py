@@ -1,6 +1,10 @@
 from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian, BayesianNetwork
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
 import numpy as np
 
 # Test on the parameters
@@ -163,17 +167,68 @@ def test_BayesianNetwork_input():
 
     dim   = np.array([10, 30, 10])
 
-    BayesianNetwork1_prev = BayesianNetwork(dim)
-    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
+    BayesianNetwork_prova_prev = BayesianNetwork(dim)
+    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_prova_prev)
 
-    x = torch.tensor( np.random.uniform( 0, 1, (20, 10) ), dtype=torch.float64 ) 
-    y = torch.tensor( np.random.choice(range(0, 10), 20) )
+    new_weights = torch.tensor( BayesianNetwork_prova.Linear_layer[1].mu.bias.data.numpy() + 2 )
+    BayesianNetwork_prova.Linear_layer[1].mu.bias.data = new_weights
 
-    output = BayesianNetwork1(x)
+    x = torch.tensor( np.random.uniform( 0, 1, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) , dtype= torch.long)
 
-    print(output)
+    output_prova = BayesianNetwork_prova(x)
 
-    assert ( False )
+    output_prova_softmax = F.log_softmax(output_prova, 1)
+    loss_nll_soft = F.nll_loss(output_prova_softmax, y).data.numpy()
+
+    loss_cross_entr = F.cross_entropy( output_prova, y ).data.numpy()
+
+    check1 = ( loss_cross_entr == loss_nll_soft )
+
+
+    output_prova_prev = BayesianNetwork_prova_prev(x)
+
+    loss_prova_prev = F.cross_entropy( output_prova_prev, y ).data.numpy()   
+
+    check2 = ( loss_prova_prev != loss_cross_entr )
+
+
+    assert ( check1 and check2 )
+
+
+
+
+def test_BayesianNetwork_update():
+
+    dim   = np.array([10, 30, 10])
+
+    BayesianNetwork_prova_prev = BayesianNetwork(dim)
+    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_prova_prev)
+
+    # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+    # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+
+    check_equal = (BayesianNetwork_prova.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork_prova_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
+
+    optimizer = optim.Adam(BayesianNetwork_prova.parameters())
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) , dtype= torch.long)
+
+    # for iter in range(1):
+
+    output_prova = BayesianNetwork_prova(x)
+    loss_prova = F.cross_entropy( output_prova, y )
+
+    loss_prova.backward()
+    optimizer.step()
+
+    check_diff = (BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy() !=  BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy() ).any()
+
+    # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+    # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+
+    assert ( check_equal and check_diff )
 
 
 

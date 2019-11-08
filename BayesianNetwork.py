@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 import numpy as np
 
@@ -18,8 +19,8 @@ class muParameter(nn.Module):
             self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
 
         else:
-            self.weight = nn.Parameter( muParameter_init.weight.data )
-            self.bias   = nn.Parameter( muParameter_init.bias.data   )
+            self.weight = nn.Parameter( torch.tensor( muParameter_init.weight.data.numpy(), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( muParameter_init.bias.data.numpy(),   dtype=torch.float64 )   )
 
 
 
@@ -33,8 +34,8 @@ class rhoParameter(nn.Module):
             self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features              ) ), dtype=torch.float64 ) )
 
         else:
-            self.weight = nn.Parameter( rhoParameter_init.weight.data )
-            self.bias   = nn.Parameter( rhoParameter_init.bias.data   )
+            self.weight = nn.Parameter( torch.tensor( rhoParameter_init.weight.data.data.numpy(), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( rhoParameter_init.bias.data.data.numpy(), dtype=torch.float64 )   )
 
 ##############################################################################################
 # Define a new nn.Linear from a Bayesian point of view which allows an automated reparam trick
