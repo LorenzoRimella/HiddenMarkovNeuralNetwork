@@ -47,6 +47,19 @@ def test_rho_with_initial():
     assert ( rho.weight.data.numpy() == rho_prev.weight.data.numpy() ).all()
 
 
+def test_stack():
+
+    mu  = muParameter(10, 10 )
+    rho = rhoParameter(10, 10 )
+
+    mu_stack  = mu.stack()
+    rho_stack = rho.stack()
+
+    (mu_stack.shape == rho_stack.shape)
+
+    assert (mu_stack.shape == rho_stack.shape)
+
+
 
 # Test the Linear layer
 
@@ -124,6 +137,18 @@ def test_Linear_multi_input():
     # print(Linear1.mu.weight.grad)
 
     assert ( (output.data.numpy()[0, :] == output.data.numpy()).all() and output.data.numpy().shape[0] == 20 )
+
+
+
+def test_Linear_stack():
+
+    Linear_stack = LinearBayesianGaussian(10, 10)
+    output = Linear_stack( torch.tensor( np.random.uniform( 1, 1, (20, 10) ), dtype=torch.float64 ) )
+
+    mu_stack, rho_stack, w_stack = Linear_stack.stack()
+
+    assert ( ( mu_stack.shape == w_stack.shape ) and ( rho_stack.data.numpy().shape[0] == 110 ) )
+
 
 
 # Test the BayesianNetwork
@@ -230,6 +255,20 @@ def test_BayesianNetwork_update():
 
     assert ( check_equal and check_diff )
 
+
+def test_BayesianNetwork_stack():
+
+    dim   = np.array([10, 30, 10])
+
+    BayesianNetwork_stack = BayesianNetwork(dim)
+    
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+
+    output_prova = BayesianNetwork_stack(x)
+
+    mu_stack, rho_stack, w_stack = BayesianNetwork_stack.stack()
+
+    assert ( ( mu_stack.shape == w_stack.shape ) and ( rho_stack.data.numpy().shape[0] == (10*30+30+30*10+10) ) ) 
 
 
 
