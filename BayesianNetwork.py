@@ -101,6 +101,10 @@ class LinearBayesianGaussian(nn.Module):
         return mu_stack, rho_stack, w_stack
 
 
+    def performance(self, input):
+
+        return F.linear(input, self.mu.weight, self.mu.bias)
+
 
 ##############################################################################################
 # Define a constructor of a Bayesian network 
@@ -231,7 +235,11 @@ class BayesianNetwork(nn.Module):
 
         sigma_prev = torch.log1p( torch.exp( rho_prev ) ) 
 
-        log_pw     = self.get_gaussianlogkernelprior( w, mu_prev, sigma_prev, mu_new)
+        # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
+        mu_prev_check = (self.alpha_k!=0)*mu_prev
+        mu_new_check  = (self.alpha_k!=0)*mu_new
+
+        log_pw     = self.get_gaussianlogkernelprior( w, mu_prev_check, sigma_prev, mu_new_check)
         log_pw_sum = (log_pw).sum()
 
         # print( "new" )
@@ -255,11 +263,14 @@ class BayesianNetwork(nn.Module):
 
 class torchHHMnet(nn.Module):
 
+    # all the default values are derived from MNIST application
     def __init__(self, architecture, 
                  alpha_k = 0.5, sigma_k = np.exp(-1), c = np.exp(7), 
                  pi = 0.5, p = 1.0,
-                 optimizer_choice, sample_size, minibatch_size, epocs, 
-                 T, sliding):
+                 loss_function = F.cross_entropy,
+                 optimizer_choice = optim.Adam, sample_size = 2000, minibatch_size = 128, epocs = 40, 
+                 T = 300, sliding =100,
+                 workers = 3):
 
         super().__init__()
 
@@ -275,12 +286,16 @@ class torchHHMnet(nn.Module):
         self.c       = c  
 
         self.optimizer_choice = optimizer_choice
+        self.loss_function    = loss_function
+
         self.sample_size      = sample_size
         self.minibatch_size   = minibatch_size
         self.epocs            = epocs  
 
         self.sliding          = sliding
         self.T                = T
+
+        self.workers = workers
 
 
         initial_model = BayesianNetwork( dim )
@@ -303,134 +318,85 @@ class torchHHMnet(nn.Module):
             # the first time step does not depend 
             self.alpha_k = ( self.alpha_user )*( t > 1 )
 
-            new_model = bayesnet.torchnet(self.L, self.dim, self.lr, self.model_list[t-1])
+            new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, self.model_list[t-1] )
 
             self.model_list.append(new_model)   
 
             x = tr_x[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
             y = tr_y[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
             
-            idx = np.random.choice(range(0, self.sample_size), self.sample_size)
+            # idx = np.random.choice(range(0, self.sample_size), self.sample_size)
             
-            x = x[idx]
-            y = y[idx]
+            # x = x[idx]
+            # y = y[idx]
             
             tr_x_tensor = torch.tensor(x, dtype = torch.float64)
             tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
             train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
-            train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers=3)   
+            train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)   
 
             iterations = int(self.sample_size/self.minibatch_size)
 
-            mu_prev    = {}
-            rho_prev   = {}
+            optimizer = optimizer_choice(self.model_list[t].parameters())
 
-            with torch.no_grad():
-                for i in range(0,self.L-1):
-                    mu_i  = {}
-                    rho_i = {}
-
-                    mu_i["weight"] = self.model_list[t-1].mu[i].weight.data.clone().detach()
-                    mu_i["bias"]   = self.model_list[t-1].mu[i].bias.data.clone().detach()
-
-                    rho_i["weight"]= self.model_list[t-1].rho[i].weight.data.clone().detach()
-                    rho_i["bias"]  = self.model_list[t-1].rho[i].bias.data.clone().detach()
-
-                    mu_prev[str(i)] = mu_i
-                    rho_prev[str(i)]= rho_i
-
-            if self.alpha_k==0:
-                # remove mu
-                for i in range(0,self.L-1):
-                    with torch.no_grad():
-                            mu_prev[str(i)]["weight"].data.zero_()
-                            mu_prev[str(i)]["bias"].data.zero_()   
-                    
-            f = torch.nn.CrossEntropyLoss(reduction = "mean")
-                            
+            # set the previous value of mu, rho
+            mu_prev, rho_prev, w_prev = model_list[t-1].stack()
+            mu_new = torch.tensor( ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.data.numpy(), dtype = torch.float64)
+                             
             for epoch in range(self.epocs):
 
-                    string = ["New epoch. "+str(epoch+1), "\n"]
-                    print(string)              
+                string = ["New epoch. "+str(epoch+1), "\n"]
+                print(string)              
 
-                    for batch in train_loader:
+                for batch in train_loader:
 
-                            inside = self.model_list[t](batch[0])
-                            t2     = f( inside, batch[1].squeeze(1) )
-                            t1     = (1/iterations)*first_likelihood(self.pi, mu_prev, self.alpha_k, self.sigma_k, self.c, self.model_list[t], mu_prev, rho_prev, self.p, self.L)                                          
+                    network_output      = self.model_list[t]( batch[0] )
+                    loss_network_output = loss_function( inside, batch[1].squeeze(1) )
 
-                            f_opt = t2 + t1
+                    loss_prior = (1/iterations)*model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)                                          
 
-                            f_opt.backward()      
+                    loss_final = loss_network_output + loss_prior
 
+                    loss_final.backward()      
 
-                            self.model_list[t].update()
-
-            ypredicted1 = np.zeros(len(y_val))
-            sim1_result =0
-
-            current = self.model_list[t](torch.tensor(x_val).double())
-            final = torch.nn.functional.softmax(current, dim=1)
-
-            for tnext in range(0,len(y_val)):
-
-                    y_t = np.array(range(0, 10))[final[tnext,:].data.numpy()==max(final[tnext,:].data.numpy())]
-
-                    ypredicted1[tnext] = y_t
-
-            sim1_result = sum(y_val==ypredicted1)/len(y_val)
-            print("Performance: ", sim1_result)
-                            
-                            
-#                         for epoch in range(self.epocs):
-
-#                                 string = ["New epoch. "+str(epoch+1), "\n"]
-#                                 print(string)              
-                    
-#                                 perm_tr = np.random.permutation( range(0, self.sample_size) )
-
-#                                 for it in range(0, iterations):
-
-#                                     index = perm_tr[ range(it*self.minibatch_size, (it+1)*self.minibatch_size) ]
-
-#                                     inside = self.model_list[t](x[index])
-#                                     t2     = f( inside, torch.tensor(y[index], dtype = torch.long) )
-#                                     t1     = (1/iterations)*first_likelihood(self.pi, mu_prev, self.alpha_k, self.sigma_k, self.c, self.model_list[t], mu_prev, rho_prev, self.p, self.L)                                          
-
-#                                     f_opt = t2 + torch.max(t1, torch.tensor(np.array([0.0])))
-
-#                                     f_opt.backward()      
-
-#                                     self.model_list[t].update()
-                            
-#                                 if (epoch)%1==0:
-#                                         string = ["###################################", "\n", "t1 ", str(t1.data.numpy()), "\n", "t2 ", str(t2.data.numpy()), "\n"]
-#                                         print(string)                                        
+                    optimizer.step()
 
 
-        ##########################################
-    # Prediction    
-    ##########################################
+            y_predicted     = np.zeros(len(y_val))
+            val_performance =0
 
-    def pred(self, x, t):
+            output           = self.model_list[t]( torch.tensor( x_val ).double() )
+            output_softmax   = F.softmax(current, dim=1)
 
-            x_tensor = torch.tensor(x, dtype=torch.float64)
+            for tnext in range(0, len( y_val ) ):
 
-            for i in range(0,self.L-2):
+                    y_t = np.array( range(0, 10) )[ output_softmax[tnext,:].data.numpy() == max( output_softmax[tnext,:].data.numpy() ) ] 
 
-                x_tensor = F.relu((self.model_list[t].mu[i])(x_tensor))
+                    y_predicted[tnext] = y_t
 
-            x_tensor = (self.model_list[t].mu[self.L-2])(x_tensor)
+            val_performance = sum(y_val == y_predicted)/len(y_val)
+            print("Performance: ", val_performance)                                      
 
 
+    # ##########################################
+    # # Prediction    
+    # ##########################################
 
-t=200
-0.5*(t>1)
-            final = torch.nn.functional.softmax(x_tensor, dim=0)
+    # def pred(self, x, t):
 
-            y_t = np.array(range(0,self.dim[self.L-1]))[final.data.numpy()==max(final.data.numpy())]
+    #     x_tensor = torch.tensor( x, dtype=torch.float64)
 
-            return({'y': y_t, 'proby': final.data.numpy()})
+    #     for layer in range(0, self.depth-2):
+
+    #         x_tensor = F.relu( (self.model_list[t].Linear_layer[layer].performance(x_tensor) ) )
+
+    #     x_tensor = self.model_list[t].Linear_layer[self.depth-2].performance(x_tensor)
+
+    #     output_softmax = torch.nn.functional.softmax(x_tensor, dim = 0)
+
+    #     y_t = np.array( range(0, 10) )[ output_softmax.data.numpy()==max(final.data.numpy())]
+
+    #     return({'y': y_t, 'proby': output_softmax.data.numpy()})
 
 
 
