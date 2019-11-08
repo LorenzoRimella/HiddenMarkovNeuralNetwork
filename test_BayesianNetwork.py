@@ -158,26 +158,22 @@ def test_BayesianNetwork_with_initial():
     assert ( check1 and check2)
 
 
-#
-# def test_BayesianNetwork_input():
-#
-#     dim   = np.array([10, 30, 100])
-#
-#     BayesianNetwork1_prev = BayesianNetwork(dim)
-#     BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
-#
-#     x                = torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
-#
-#     check1 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
-#
-#     new_weights = torch.tensor( BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() + 2 )
-#     BayesianNetwork1.Linear_layer[0].mu.weight.data = new_weights
-#     check2 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() !=  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
-#
-#     # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
-#     # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
-#
-#     assert ( check1 and check2)
+
+def test_BayesianNetwork_input():
+
+    dim   = np.array([10, 30, 10])
+
+    BayesianNetwork1_prev = BayesianNetwork(dim)
+    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
+
+    x = torch.tensor( np.random.uniform( 0, 1, (20, 10) ), dtype=torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) )
+
+    output = BayesianNetwork1(x)
+
+    print(output)
+
+    assert ( False )
 
 
 
