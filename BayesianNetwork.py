@@ -108,7 +108,10 @@ class LinearBayesianGaussian(nn.Module):
 
 class BayesianNetwork(nn.Module):
 
-    def __init__(self, architecture, BayesianNetwork_init = False ):
+    def __init__(self, architecture, 
+                 alpha_k = 0.5, sigma_k = np.exp(6), c= np.exp(7), 
+                 pi = 0.5, p = 1.0, 
+                 BayesianNetwork_init = False ):
 
         super().__init__()
 
@@ -168,24 +171,25 @@ class BayesianNetwork(nn.Module):
     def get_gaussianlogkernelprior(self, x, mu_prev, sigma_prev, mu_new):
         
         with torch.no_grad():
+            mu_new     = torch.tensor( mu_new.data.numpy() )
             mu_prev    = torch.tensor( mu_prev.data.numpy() )
             sigma_prev = torch.tensor( sigma_prev.data.numpy() )
                 
         mu1    = mu_new - self.alpha_k*mu_new + self.alpha_k*mu_prev
         sigma1 = torch.sqrt(self.sigma_k*self.sigma_k + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)
-        f1= self.get_gaussianloglikelihood(x, mu1, sigma1)
+        f1= self.get_gaussianlikelihood(x, mu1, sigma1)
                 
         mu2    = mu_new - self.alpha_k*mu_new
         sigma2 = torch.sqrt(self.sigma_k*self.sigma_k + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)       
-        f2= self.get_gaussianloglikelihood(x, mu2, sigma2)
+        f2= self.get_gaussianlikelihood(x, mu2, sigma2)
                 
         mu3    = mu_new - self.alpha_k*mu_new + self.alpha_k*mu_prev
         sigma3 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)       
-        f3= self.get_gaussianloglikelihood(x, mu3, sigma3)
+        f3= self.get_gaussianlikelihood(x, mu3, sigma3)
                 
         mu4    = mu_new - self.alpha_k*mu_new 
         sigma4 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)   
-        f4= self.get_gaussianloglikelihood(x, mu4, sigma4)
+        f4= self.get_gaussianlikelihood(x, mu4, sigma4)
 
         overall = self.pi*self.p*(f1) + self.pi*(1-self.p)*(f2) + (1-self.pi)*self.p*(f3) + (1-self.pi)*(1-self.p)*(f4)
         summing = (torch.log(overall))
@@ -211,7 +215,7 @@ class BayesianNetwork(nn.Module):
         log_qw_theta_sum = 0
         log_pw_sum       = 0
         
-         w, mu, rho = self.stack()
+        w, mu, rho = self.stack()
 
         sigma = torch.log1p( torch.exp( rho ) )
 

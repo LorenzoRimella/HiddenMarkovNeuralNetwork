@@ -173,7 +173,7 @@ def test_BayesianNetwork_with_initial():
     dim   = np.array([10, 30, 100])
 
     BayesianNetwork1_prev = BayesianNetwork(dim)
-    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork1_prev)
+    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork1_prev)
 
     check1 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
 
@@ -193,7 +193,7 @@ def test_BayesianNetwork_input():
     dim   = np.array([10, 30, 10])
 
     BayesianNetwork_prova_prev = BayesianNetwork(dim)
-    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_prova_prev)
+    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     new_weights = torch.tensor( BayesianNetwork_prova.Linear_layer[1].mu.bias.data.numpy() + 2 )
     BayesianNetwork_prova.Linear_layer[1].mu.bias.data = new_weights
@@ -228,7 +228,7 @@ def test_BayesianNetwork_update():
     dim   = np.array([10, 30, 10])
 
     BayesianNetwork_prova_prev = BayesianNetwork(dim)
-    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_prova_prev)
+    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
     # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
@@ -271,6 +271,56 @@ def test_BayesianNetwork_stack():
     assert ( ( mu_stack.shape == w_stack.shape ) and ( rho_stack.data.numpy().shape[0] == (10*30+30+30*10+10) ) ) 
 
 
+
+def test_BayesianNetwork_prior():
+
+    dim   = np.array([10, 30, 10])
+
+    BayesianNetwork_prova_prev_prev = BayesianNetwork(dim)
+    BayesianNetwork_prova_prev      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev_prev)
+    BayesianNetwork_prova           = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+
+    # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+    # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+
+    optimizer = optim.Adam(BayesianNetwork_prova.parameters())
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) , dtype= torch.long)
+
+    # for iter in range(1):
+    call         = BayesianNetwork_prova_prev(x)
+    output_prova = BayesianNetwork_prova(x)
+
+    loss_network = F.cross_entropy( output_prova, y )
+
+    w_prev, mu_prev, rho_prev = BayesianNetwork_prova_prev.stack()
+    loss_prior   = BayesianNetwork_prova.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
+
+    loss = loss_network + loss_prior
+
+    loss.backward()
+    optimizer.step()
+
+    check_diff = True
+    for layer in range(0, 1):
+        check_diff = ( check_diff and 
+                       (BayesianNetwork_prova.Linear_layer[layer].mu.weight.data.numpy() !=  BayesianNetwork_prova_prev.Linear_layer[layer].mu.weight.data.numpy() ).any() )
+
+        check_diff = ( check_diff and 
+                       (BayesianNetwork_prova.Linear_layer[layer].rho.weight.data.numpy() !=  BayesianNetwork_prova_prev.Linear_layer[layer].rho.weight.data.numpy() ).any() )
+
+        check_diff = ( check_diff and 
+                       (BayesianNetwork_prova.Linear_layer[layer].rho.bias.data.numpy() !=  BayesianNetwork_prova_prev.Linear_layer[layer].rho.bias.data.numpy() ).any() )
+
+        check_diff = ( check_diff and 
+                       (BayesianNetwork_prova_prev_prev.Linear_layer[layer].mu.bias.data.numpy() ==  BayesianNetwork_prova_prev.Linear_layer[layer].mu.bias.data.numpy() ).any() )
+
+
+    # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+    # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
+
+    assert ( check_diff )
 
 
 # from Refact_tree import branch
