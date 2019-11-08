@@ -1,4 +1,5 @@
 from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian, BayesianNetwork
+from different_prior_computation import first_likelihood
 
 import torch
 import torch.nn as nn
@@ -294,7 +295,7 @@ def test_BayesianNetwork_prior():
 
     loss_network = F.cross_entropy( output_prova, y )
 
-    w_prev, mu_prev, rho_prev = BayesianNetwork_prova_prev.stack()
+    mu_prev, rho_prev, w_prev = BayesianNetwork_prova_prev.stack()
     loss_prior   = BayesianNetwork_prova.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
 
     loss = loss_network + loss_prior
@@ -322,6 +323,57 @@ def test_BayesianNetwork_prior():
 
     assert ( check_diff )
 
+
+
+def test_prior_withdiffcomp():
+
+    dim   = np.array([10, 30, 10])
+    L       = 3
+
+    BayesianNetwork_prova_prev      = BayesianNetwork( dim )
+    BayesianNetwork_prova           = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+
+    call1 = BayesianNetwork_prova(x)
+    call2 = BayesianNetwork_prova_prev(x)
+
+    mu_prev    = {}
+    rho_prev   = {}
+
+    with torch.no_grad():
+        for i in range(0, L-1):
+            mu_i  = {}
+            rho_i = {}
+
+            mu_i["weight"] = BayesianNetwork_prova_prev.Linear_layer[i].mu.weight.data.clone().detach()
+            mu_i["bias"]   = BayesianNetwork_prova_prev.Linear_layer[i].mu.bias.data.clone().detach()
+                                        
+            rho_i["weight"]= BayesianNetwork_prova_prev.Linear_layer[i].rho.weight.data.clone().detach()
+            rho_i["bias"]  = BayesianNetwork_prova_prev.Linear_layer[i].rho.bias.data.clone().detach()
+
+            mu_prev[str(i)] = mu_i
+            rho_prev[str(i)]= rho_i
+
+    pi      = 0.5
+    alpha_k = 0.5
+    sigma_k = np.exp(-1) 
+    c       = np.exp(7) 
+    model   = BayesianNetwork_prova 
+    p       = 1.0
+        
+    # print( pi, alpha_k, sigma_k, c, p )
+    # print( BayesianNetwork_prova.pi, BayesianNetwork_prova.alpha_k, BayesianNetwork_prova.sigma_k, BayesianNetwork_prova.c, BayesianNetwork_prova.p )
+
+    loss_prior_metold  = first_likelihood(pi, mu_prev, alpha_k, sigma_k, c, model, mu_prev, rho_prev, p, L)
+
+    mu_prev2, rho_prev2, w_prev2 = BayesianNetwork_prova_prev.stack()
+
+    loss_prior_metnew   = BayesianNetwork_prova.get_gaussiandistancefromprior(mu_prev2, mu_prev2, rho_prev2)
+
+    # print(loss_prior_metnew - loss_prior_metold)
+
+    assert ( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-5) )
 
 # from Refact_tree import branch
 #
