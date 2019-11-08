@@ -268,7 +268,8 @@ class torchHHMnet(nn.Module):
                  alpha_k = 0.5, sigma_k = np.exp(-1), c = np.exp(7), 
                  pi = 0.5, p = 1.0,
                  loss_function = F.cross_entropy,
-                 optimizer_choice = optim.Adam, sample_size = 2000, minibatch_size = 128, epocs = 40, 
+                #  optimizer_choice = optim.Adam, 
+                 sample_size = 2000, minibatch_size = 128, epocs = 40, 
                  T = 300, sliding =100,
                  workers = 3):
 
@@ -285,7 +286,7 @@ class torchHHMnet(nn.Module):
         self.p       = p      
         self.c       = c  
 
-        self.optimizer_choice = optimizer_choice
+        # self.optimizer_choice = optimizer_choice
         self.loss_function    = loss_function
 
         self.sample_size      = sample_size
@@ -298,7 +299,7 @@ class torchHHMnet(nn.Module):
         self.workers = workers
 
 
-        initial_model = BayesianNetwork( dim )
+        initial_model = BayesianNetwork( self.architecture )
 
         self.model_list = list()
         self.model_list.append(initial_model)
@@ -308,6 +309,9 @@ class torchHHMnet(nn.Module):
     def forward_pass(self, tr_x, tr_y, x_val, y_val):
 
         t = 0
+        # call the initial model for initialization
+        call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
+
         while t < (self.T):
 
             t = t+1            
@@ -316,7 +320,7 @@ class torchHHMnet(nn.Module):
             print(string)
 
             # the first time step does not depend 
-            self.alpha_k = ( self.alpha_user )*( t > 1 )
+            self.alpha_k = ( self.alpha_k_user )*( t > 1 )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, self.model_list[t-1] )
 
@@ -337,10 +341,11 @@ class torchHHMnet(nn.Module):
 
             iterations = int(self.sample_size/self.minibatch_size)
 
-            optimizer = optimizer_choice(self.model_list[t].parameters())
+            # optimizer = optimizer_choice(self.model_list[t].parameters())
+            optimizer =  optim.Adam(self.model_list[t].parameters())
 
             # set the previous value of mu, rho
-            mu_prev, rho_prev, w_prev = model_list[t-1].stack()
+            mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
             mu_new = torch.tensor( ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.data.numpy(), dtype = torch.float64)
                              
             for epoch in range(self.epocs):
@@ -351,9 +356,9 @@ class torchHHMnet(nn.Module):
                 for batch in train_loader:
 
                     network_output      = self.model_list[t]( batch[0] )
-                    loss_network_output = loss_function( inside, batch[1].squeeze(1) )
+                    loss_network_output = loss_function( network_output, batch[1].squeeze(1) )
 
-                    loss_prior = (1/iterations)*model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)                                          
+                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)                                          
 
                     loss_final = loss_network_output + loss_prior
 
@@ -362,20 +367,20 @@ class torchHHMnet(nn.Module):
                     optimizer.step()
 
 
-            y_predicted     = np.zeros(len(y_val))
-            val_performance =0
+                y_predicted     = np.zeros(len(y_val))
+                val_performance =0
 
-            output           = self.model_list[t]( torch.tensor( x_val ).double() )
-            output_softmax   = F.softmax(current, dim=1)
+                output           = self.model_list[t]( torch.tensor( x_val ).double() )
+                output_softmax   = F.softmax(output, dim=1)
 
-            for tnext in range(0, len( y_val ) ):
+                for tnext in range(0, len( y_val ) ):
 
-                    y_t = np.array( range(0, 10) )[ output_softmax[tnext,:].data.numpy() == max( output_softmax[tnext,:].data.numpy() ) ] 
+                        y_t = np.array( range(0, 10) )[ output_softmax[tnext,:].data.numpy() == max( output_softmax[tnext,:].data.numpy() ) ] 
 
-                    y_predicted[tnext] = y_t
+                        y_predicted[tnext] = y_t
 
-            val_performance = sum(y_val == y_predicted)/len(y_val)
-            print("Performance: ", val_performance)                                      
+                val_performance = sum(y_val == y_predicted)/len(y_val)
+                print("Performance: ", val_performance)                                      
 
 
     # ##########################################
