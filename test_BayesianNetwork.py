@@ -357,8 +357,8 @@ def test_prior_withdiffcomp():
 
     pi      = 0.5
     alpha_k = 0.5
-    sigma_k = np.exp(-1) 
-    c       = np.exp(7) 
+    sigma_k = np.exp(0) 
+    c       = np.exp(6) 
     model   = BayesianNetwork_prova 
     p       = 1.0
         

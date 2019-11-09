@@ -19,8 +19,12 @@ class muParameter(nn.Module):
         self.out_features = out_features
 
         if muParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
+            # self.weight = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features, in_features) ), dtype=torch.float64 ) )
+            # self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
+
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features, in_features) ),  dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features              ) ), dtype=torch.float64 ) )
+
 
         else:
             self.weight = nn.Parameter( torch.tensor( muParameter_init.weight.data.numpy(), dtype=torch.float64 ) )
@@ -49,12 +53,34 @@ class rhoParameter(nn.Module):
         else:
             self.weight = nn.Parameter( torch.tensor( rhoParameter_init.weight.data.data.numpy(), dtype=torch.float64 ) )
             self.bias   = nn.Parameter( torch.tensor( rhoParameter_init.bias.data.data.numpy(), dtype=torch.float64 )   )
-    
+
     def stack(self):
 
         rho_stack = torch.cat( ( self.weight.view( self.in_features*self.out_features ), self.bias.view( self.out_features ) ), dim=0 )
 
         return rho_stack
+        
+
+
+##############################################################################################
+# Define a class of Gaussian for the reparam trick
+##############################################################################################
+
+class Gaussian(object):
+    def __init__(self, mu, rho):
+        super().__init__()
+        self.mu = mu
+        self.rho = rho
+        self.normal = torch.distributions.Normal(0,1)
+    
+    @property
+    def sigma(self):
+        return torch.log1p(torch.exp(self.rho))
+    
+    def sample(self):
+        epsilon = self.normal.sample(self.rho.size())
+        return self.mu + self.sigma * epsilon
+
 
 
 ##############################################################################################
@@ -77,16 +103,14 @@ class LinearBayesianGaussian(nn.Module):
             self.mu  = muParameter( in_features, out_features, LinearBayesianGaussian_init.mu )
             self.rho = rhoParameter(in_features, out_features, LinearBayesianGaussian_init.rho)
 
+        self.w_weight_rv = Gaussian( self.mu.weight, self.rho.weight )
+        self.w_bias_rv   = Gaussian( self.mu.bias  , self.rho.bias  )     
+
 
     def forward(self, input):
 
-        sigma_weight   = torch.log1p(torch.exp(self.rho.weight))
-        epsilon_weight = torch.distributions.Normal(0,1).sample( self.mu.weight.size() )
-        self.w_weight       = self.mu.weight + sigma_weight * epsilon_weight
-
-        sigma_bias   = torch.log1p(torch.exp(self.rho.bias))
-        epsilon_bias = torch.distributions.Normal(0,1).sample( self.mu.bias.size() )
-        self.w_bias       = self.mu.bias + sigma_bias * epsilon_bias
+        self.w_weight = self.w_weight_rv.sample()
+        self.w_bias   = self.w_bias_rv.sample()
 
         return F.linear(input, self.w_weight, self.w_bias)
 
@@ -107,14 +131,14 @@ class LinearBayesianGaussian(nn.Module):
 
 
 ##############################################################################################
-# Define a constructor of a Bayesian network 
+# Define a constructor of a Bayesian network
 ##############################################################################################
 
 class BayesianNetwork(nn.Module):
 
-    def __init__(self, architecture, 
-                 alpha_k = 0.5, sigma_k = np.exp(-1), c= np.exp(7), 
-                 pi = 0.5, p = 1.0, 
+    def __init__(self, architecture,
+                 alpha_k = 0.5, sigma_k = np.exp(-1), c= np.exp(7),
+                 pi = 0.5, p = 1.0,
                  BayesianNetwork_init = False ):
 
         super().__init__()
@@ -123,10 +147,10 @@ class BayesianNetwork(nn.Module):
         self.depth         = self.architecture.shape[0]
 
         self.alpha_k = alpha_k
-        self.sigma_k = sigma_k 
-        self.pi      = pi     
-        self.p       = p      
-        self.c       = c      
+        self.sigma_k = sigma_k
+        self.pi      = pi
+        self.p       = p
+        self.c       = c
 
         self.Linear_layer  = nn.ModuleList()
 
@@ -173,26 +197,26 @@ class BayesianNetwork(nn.Module):
     ###############################################################################################
 
     def get_gaussianlogkernelprior(self, x, mu_prev, sigma_prev, mu_new):
-        
+
         with torch.no_grad():
-            mu_new     = torch.tensor( mu_new.data.numpy() )
-            mu_prev    = torch.tensor( mu_prev.data.numpy() )
-            sigma_prev = torch.tensor( sigma_prev.data.numpy() )
-                
+            mu_new     = mu_new.clone().detach()
+            mu_prev    = mu_prev.clone().detach()
+            sigma_prev = sigma_prev.clone().detach()
+
         mu1    = mu_new - self.alpha_k*mu_new + self.alpha_k*mu_prev
         sigma1 = torch.sqrt(self.sigma_k*self.sigma_k + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)
         f1     = self.get_gaussianlikelihood(x, mu1, sigma1)
-                
+
         mu2    = mu_new - self.alpha_k*mu_new
-        sigma2 = torch.sqrt(self.sigma_k*self.sigma_k + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)       
+        sigma2 = torch.sqrt(self.sigma_k*self.sigma_k + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)
         f2     = self.get_gaussianlikelihood(x, mu2, sigma2)
-                
+
         mu3    = mu_new - self.alpha_k*mu_new + self.alpha_k*mu_prev
-        sigma3 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)       
+        sigma3 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)
         f3     = self.get_gaussianlikelihood(x, mu3, sigma3)
-                
-        mu4    = mu_new - self.alpha_k*mu_new 
-        sigma4 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)   
+
+        mu4    = mu_new - self.alpha_k*mu_new
+        sigma4 = torch.sqrt(self.sigma_k*self.sigma_k/(self.c*self.c) + self.alpha_k*self.alpha_k*sigma_prev*sigma_prev)
         f4     = self.get_gaussianlikelihood(x, mu4, sigma4)
 
         overall = self.pi*self.p*(f1) + self.pi*(1-self.p)*(f2) + (1-self.pi)*self.p*(f3) + (1-self.pi)*(1-self.p)*(f4)
@@ -200,7 +224,7 @@ class BayesianNetwork(nn.Module):
 
         # print("new")
         # print(f1.sum(), f2.sum(), f3.sum(), f4.sum())
-        
+
         return summing
 
 
@@ -218,10 +242,10 @@ class BayesianNetwork(nn.Module):
     # Here we are using the previous variational approximation as approximate posterior
 
     def get_gaussiandistancefromprior(self, mu_new, mu_prev, rho_prev):
-            
+
         log_qw_theta_sum = 0
         log_pw_sum       = 0
-        
+
         mu, rho, w = self.stack()
 
         # print("new weight")
@@ -233,7 +257,7 @@ class BayesianNetwork(nn.Module):
         log_qw_theta_sum = (log_qw_theta).sum()
 
 
-        sigma_prev = torch.log1p( torch.exp( rho_prev ) ) 
+        sigma_prev = torch.log1p( torch.exp( rho_prev ) )
 
         # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
         mu_prev_check = (self.alpha_k!=0)*mu_prev
@@ -243,7 +267,7 @@ class BayesianNetwork(nn.Module):
         log_pw_sum = (log_pw).sum()
 
         # print( "new" )
-        # print( log_qw_theta_sum, log_pw_sum )
+        # print(log_qw_theta_sum.data.numpy(), log_pw_sum.data.numpy())
 
         return (log_qw_theta_sum - log_pw_sum)
 
@@ -264,12 +288,12 @@ class BayesianNetwork(nn.Module):
 class torchHHMnet(nn.Module):
 
     # all the default values are derived from MNIST application
-    def __init__(self, architecture, 
-                 alpha_k = 0.5, sigma_k = np.exp(-1), c = np.exp(7), 
+    def __init__(self, architecture,
+                 alpha_k = 0.5, sigma_k = np.exp(-1), c = np.exp(7),
                  pi = 0.5, p = 1.0,
                  loss_function = F.cross_entropy,
-                #  optimizer_choice = optim.Adam, 
-                 sample_size = 2000, minibatch_size = 128, epocs = 40, 
+                #  optimizer_choice = optim.Adam,
+                 sample_size = 2000, minibatch_size = 128, epocs = 40,
                  T = 300, sliding =100,
                  workers = 3):
 
@@ -281,17 +305,17 @@ class torchHHMnet(nn.Module):
         self.alpha_k_user = alpha_k
         self.alpha_k      = alpha_k
 
-        self.sigma_k = sigma_k 
-        self.pi      = pi     
-        self.p       = p      
-        self.c       = c  
+        self.sigma_k = sigma_k
+        self.pi      = pi
+        self.p       = p
+        self.c       = c
 
         # self.optimizer_choice = optimizer_choice
         self.loss_function    = loss_function
 
         self.sample_size      = sample_size
         self.minibatch_size   = minibatch_size
-        self.epocs            = epocs  
+        self.epocs            = epocs
 
         self.sliding          = sliding
         self.T                = T
@@ -314,58 +338,68 @@ class torchHHMnet(nn.Module):
 
         while t < (self.T):
 
-            t = t+1            
+            t = t+1
 
             string = ["Time: "+ str(t), "\n"]
             print(string)
 
-            # the first time step does not depend 
+            # the first time step does not depend
             self.alpha_k = ( self.alpha_k_user )*( t > 1 )
+            # print( "alpha_k ", self.alpha_k )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, self.model_list[t-1] )
 
-            self.model_list.append(new_model)   
+            self.model_list.append(new_model)
+            self.model_list[t-1].zero_grad()
 
             x = tr_x[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
             y = tr_y[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
-            
+
             # idx = np.random.choice(range(0, self.sample_size), self.sample_size)
-            
+
             # x = x[idx]
             # y = y[idx]
-            
+
             tr_x_tensor = torch.tensor(x, dtype = torch.float64)
-            tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
+            # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
+            tr_y_tensor = torch.tensor( y, dtype = torch.long)
+
             train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
-            train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)   
+            train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)
 
             iterations = int(self.sample_size/self.minibatch_size)
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
-            optimizer =  optim.Adam(self.model_list[t].parameters())
-
+            # optimizer =  optim.Adam(self.model_list[t].parameters())
+            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = (1e-2)*(t==1) + (1e-3)*(t!=1) )
+ 
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-            mu_new = torch.tensor( ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.data.numpy(), dtype = torch.float64)
-                             
+            mu_new = ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach()
+
             for epoch in range(self.epocs):
 
                 string = ["New epoch. "+str(epoch+1), "\n"]
-                print(string)              
+                print(string)
 
                 for batch in train_loader:
+                    self.model_list[t].zero_grad()
+                    # optimizer.zero_grad()
 
                     network_output      = self.model_list[t]( batch[0] )
-                    loss_network_output = loss_function( network_output, batch[1].squeeze(1) )
+                    # print(batch[0])
+                    loss_network_output = self.loss_function( network_output, batch[1] )
+                    # print(batch[1].squeeze(1))
 
-                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)                                          
+                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
 
                     loss_final = loss_network_output + loss_prior
 
-                    loss_final.backward()      
+                    loss_final.backward()
 
                     optimizer.step()
 
+                print("Prior ", loss_prior.data.numpy(), ". Loss ", loss_network_output.data.numpy())
 
                 y_predicted     = np.zeros(len(y_val))
                 val_performance =0
@@ -375,16 +409,18 @@ class torchHHMnet(nn.Module):
 
                 for tnext in range(0, len( y_val ) ):
 
-                        y_t = np.array( range(0, 10) )[ output_softmax[tnext,:].data.numpy() == max( output_softmax[tnext,:].data.numpy() ) ] 
+                        y_t = np.array( range(0, 10) )[ output_softmax[tnext,:].data.numpy() == max( output_softmax[tnext,:].data.numpy() ) ]
 
                         y_predicted[tnext] = y_t
 
                 val_performance = sum(y_val == y_predicted)/len(y_val)
-                print("Performance: ", val_performance)                                      
+                print("Performance: ", val_performance)
+
+            del optimizer
 
 
     # ##########################################
-    # # Prediction    
+    # # Prediction
     # ##########################################
 
     # def pred(self, x, t):
@@ -402,19 +438,3 @@ class torchHHMnet(nn.Module):
     #     y_t = np.array( range(0, 10) )[ output_softmax.data.numpy()==max(final.data.numpy())]
 
     #     return({'y': y_t, 'proby': output_softmax.data.numpy()})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
