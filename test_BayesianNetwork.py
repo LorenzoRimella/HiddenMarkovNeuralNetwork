@@ -375,21 +375,95 @@ def test_prior_withdiffcomp():
 
     assert ( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-5) )
 
-# from Refact_tree import branch
-#
-# from math import sin, cos
-# from matplotlib import pyplot as plt
-#
-# def test_initial_branch():
-#
-#     b1 = branch(0, 1, 0, 1)
-#
-#     assert  (b1.x_initial == 0 and b1.y_initial == 0)
-#
-# def test_plot():
-#
-#     b1 = branch(0, 1, 0, 1)
-#
-#     b1.draw_branch()
-#
-#     plt.show()
+
+
+def test_evolution():
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    dim   = np.array([10, 30, 10])
+    L       = 3
+
+    BayesianNetwork_prev = BayesianNetwork( dim )
+              
+    BayesianNetwork_1    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev)
+    BayesianNetwork_2    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev)
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice( range(0, 10), 20 ), dtype= torch.long )
+ 
+    call1      = BayesianNetwork_1(x)
+    call2      = BayesianNetwork_2(x)
+    call_prova = BayesianNetwork_prev(x)
+
+    mu_prev    = {}
+    rho_prev   = {}
+
+    with torch.no_grad():
+        for i in range(0, L-1):
+            mu_i  = {}
+            rho_i = {}
+
+            mu_i["weight"] = BayesianNetwork_prev.Linear_layer[i].mu.weight.data.clone().detach()
+            mu_i["bias"]   = BayesianNetwork_prev.Linear_layer[i].mu.bias.data.clone().detach()
+                
+            rho_i["weight"]= BayesianNetwork_prev.Linear_layer[i].rho.weight.data.clone().detach()
+            rho_i["bias"]  = BayesianNetwork_prev.Linear_layer[i].rho.bias.data.clone().detach()
+
+            mu_prev[str(i)] = mu_i
+            rho_prev[str(i)]= rho_i
+
+    pi      = 0.5
+    alpha_k = 0.5
+    sigma_k = np.exp(0) 
+    c       = np.exp(6) 
+    model   = BayesianNetwork_1
+    p       = 1.0
+
+    check1 = (BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() == BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()).all()
+    print(check1)
+        
+    # print( pi, alpha_k, sigma_k, c, p )
+    # print( BayesianNetwork_prova.pi, BayesianNetwork_prova.alpha_k, BayesianNetwork_prova.sigma_k, BayesianNetwork_prova.c, BayesianNetwork_prova.p )
+
+    optimizer = optim.SGD( BayesianNetwork_1.parameters(), lr = 0.01 )
+    optimizer.zero_grad()
+
+    loss_prior_met1  = first_likelihood(pi, mu_prev, alpha_k, sigma_k, c, model, mu_prev, rho_prev, p, L)
+    loss_net1        = F.cross_entropy( call1, y)
+    loss1 = loss_net1 + loss_prior_met1
+
+    loss1.backward()
+    optimizer.step()
+
+    
+    mu_prev2, rho_prev2, w_prev2 = BayesianNetwork_prev.stack()
+    mu2, rho2, w2 = BayesianNetwork_2.stack()
+    # print(mu2)
+
+    loss_prior_met2 = BayesianNetwork_2.get_gaussiandistancefromprior(mu_prev2, mu_prev2, rho_prev2)
+    loss_net2       = F.cross_entropy( call2, y )
+    loss2 = loss_net2  + loss_prior_met2
+
+    # mu2.grad.zero_()
+    # rho2.grad.zero_()
+    # w2.grad.zero_()
+
+    loss2.backward()
+    # print(BayesianNetwork_2.Linear_layer[0].mu.weight, BayesianNetwork_2.Linear_layer[0].mu.weight.grad)
+
+    BayesianNetwork_2.Linear_layer[0].mu.weight.data  = BayesianNetwork_2.Linear_layer[0].mu.weight.data + 0.01*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
+
+    print( BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() )
+    print( '#############################################################' )
+    print( BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() )
+    
+    assert ( BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() == BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()  ).all()
+
+
+
+
+
+
+

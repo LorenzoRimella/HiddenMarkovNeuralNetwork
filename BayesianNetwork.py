@@ -27,8 +27,8 @@ class muParameter(nn.Module):
 
 
         else:
-            self.weight = nn.Parameter( torch.tensor( muParameter_init.weight.data.numpy(), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( muParameter_init.bias.data.numpy(),   dtype=torch.float64 ) )
+            self.weight = nn.Parameter( muParameter_init.weight.clone().detach() )
+            self.bias   = nn.Parameter( muParameter_init.bias.clone().detach() )
 
 
     def stack(self):
@@ -48,11 +48,11 @@ class rhoParameter(nn.Module):
 
         if rhoParameter_init == False:
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features              ) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features             ) ), dtype=torch.float64 ) )
 
         else:
-            self.weight = nn.Parameter( torch.tensor( rhoParameter_init.weight.data.data.numpy(), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( rhoParameter_init.bias.data.data.numpy(), dtype=torch.float64 )   )
+            self.weight = nn.Parameter( rhoParameter_init.weight.clone().detach() )
+            self.bias   = nn.Parameter( rhoParameter_init.bias.clone().detach() )
 
     def stack(self):
 
@@ -371,11 +371,11 @@ class torchHHMnet(nn.Module):
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
             # optimizer =  optim.Adam(self.model_list[t].parameters())
-            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-            mu_new = ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach()
+            mu_new = mu_prev.clone().detach() # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach()
 
             for epoch in range(self.epocs):
 
