@@ -20,11 +20,11 @@ class muParameter(nn.Module):
         self.out_features = out_features
 
         if muParameter_init == False:
-            # self.weight = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features, in_features) ), dtype=torch.float64 ) )
-            # self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
 
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features, in_features) ),  dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features             ) ), dtype=torch.float64 ) )
+            # self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features, in_features) ),  dtype=torch.float64 ) )
+            # self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features             ) ), dtype=torch.float64 ) )
 
         elif muParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features, in_features) ),  dtype=torch.float64 ) )
@@ -51,8 +51,8 @@ class rhoParameter(nn.Module):
         self.out_features = out_features
 
         if rhoParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -7, -6, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -7, -6, (out_features             ) ), dtype=torch.float64 ) )
 
         elif rhoParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
@@ -389,8 +389,8 @@ class torchHHMnet(nn.Module):
             iterations = int(self.sample_size/self.minibatch_size)
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
-            # optimizer =  optim.Adam(self.model_list[t].parameters())
-            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            optimizer =  optim.Adam(self.model_list[t].parameters())
+            # optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()

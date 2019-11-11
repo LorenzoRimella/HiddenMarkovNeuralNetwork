@@ -358,8 +358,8 @@ def test_prior_withdiffcomp():
 
     pi      = 0.5
     alpha_k = 0.5
-    sigma_k = np.exp(0) 
-    c       = np.exp(6) 
+    sigma_k = np.exp(-1) 
+    c       = np.exp(7) 
     model   = BayesianNetwork_prova 
     p       = 1.0
         
@@ -374,7 +374,7 @@ def test_prior_withdiffcomp():
 
     # print(loss_prior_metnew - loss_prior_metold)
 
-    assert ( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-5) )
+    assert ( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-8) )
 
 
 
