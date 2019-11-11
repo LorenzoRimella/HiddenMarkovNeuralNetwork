@@ -377,6 +377,61 @@ def test_prior_withdiffcomp():
 
 
 
+def test_BayesianNetwork_prior_stack_evolution():
+
+    dim   = np.array([10, 30, 10])
+
+    BayesianNetwork_prova_prev = BayesianNetwork(dim )
+    BayesianNetwork_prova1     = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova2     = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+
+    optimizer1 = optim.Adam(BayesianNetwork_prova1.parameters())
+    optimizer1.zero_grad()
+    optimizer2 = optim.Adam(BayesianNetwork_prova2.parameters())
+    optimizer2.zero_grad()
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) , dtype= torch.long)
+
+    # for iter in range(1):
+    call         = BayesianNetwork_prova_prev(x)
+    
+    torch.manual_seed(0)
+    np.random.seed(0)
+    output_prova1 = BayesianNetwork_prova1(x)
+    
+    torch.manual_seed(0)
+    np.random.seed(0)
+    output_prova2 = BayesianNetwork_prova2(x)
+
+    loss_network1 = F.cross_entropy( output_prova1, y )
+    # print(loss_network1)
+    loss_network2 = F.cross_entropy( output_prova2, y )
+    # print(loss_network2)
+
+    mu_prev, rho_prev, w_prev = BayesianNetwork_prova_prev.stack()
+    loss_prior1   = BayesianNetwork_prova1.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
+    loss_prior2   = BayesianNetwork_prova2.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
+
+    mu2, rho2, w2 = BayesianNetwork_prova2.stack()
+
+    loss1 = loss_network1 + loss_prior1
+    loss2 = loss_network2 + loss_prior2 + (10*mu2).sum()
+
+    # print( BayesianNetwork_prova1.Linear_layer[0].mu.weight.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.data.numpy()) )
+
+    loss1.backward()
+    loss2.backward()
+
+    # print( BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()) )
+
+    # optimizer1.step()
+    # optimizer2.step()
+
+    # print( BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()) )
+
+    assert ( (BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()-10)) < np.exp(-5) ).all()
+
 def test_evolution():
 
     torch.manual_seed(0)
@@ -393,8 +448,13 @@ def test_evolution():
     x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
     y = torch.tensor( np.random.choice( range(0, 10), 20 ), dtype= torch.long )
  
+    torch.manual_seed(0)
+    np.random.seed(0)
     call1      = BayesianNetwork_1(x)
+    torch.manual_seed(0)
+    np.random.seed(0)
     call2      = BayesianNetwork_2(x)
+
     call_prova = BayesianNetwork_prev(x)
 
     mu_prev    = {}
@@ -416,48 +476,47 @@ def test_evolution():
 
     pi      = 0.5
     alpha_k = 0.5
-    sigma_k = np.exp(0) 
-    c       = np.exp(6) 
+    sigma_k = np.exp(-1) 
+    c       = np.exp(7) 
     model   = BayesianNetwork_1
     p       = 1.0
 
     check1 = (BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() == BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()).all()
-    print(check1)
+    # print(check1)
         
     # print( pi, alpha_k, sigma_k, c, p )
     # print( BayesianNetwork_prova.pi, BayesianNetwork_prova.alpha_k, BayesianNetwork_prova.sigma_k, BayesianNetwork_prova.c, BayesianNetwork_prova.p )
 
-    optimizer = optim.SGD( BayesianNetwork_1.parameters(), lr = 0.01 )
-    optimizer.zero_grad()
+    optimizer1 = optim.SGD( BayesianNetwork_1.parameters(), lr = 0.001 )
+    optimizer1.zero_grad()
 
     loss_prior_met1  = first_likelihood(pi, mu_prev, alpha_k, sigma_k, c, model, mu_prev, rho_prev, p, L)
     loss_net1        = F.cross_entropy( call1, y)
-    loss1 = loss_net1 + loss_prior_met1
+    # print(loss_net1)
+    # print(loss_prior_met1)
+    loss1 = loss_net1 #+ loss_prior_met1
 
     loss1.backward()
-    optimizer.step()
+    optimizer1.step()
 
-    
+
+    optimizer2 = optim.SGD( BayesianNetwork_2.parameters(), lr = 0.01 )
+    optimizer2.zero_grad()    
+
     mu_prev2, rho_prev2, w_prev2 = BayesianNetwork_prev.stack()
     mu2, rho2, w2 = BayesianNetwork_2.stack()
     # print(mu2)
 
     loss_prior_met2 = BayesianNetwork_2.get_gaussiandistancefromprior(mu_prev2, mu_prev2, rho_prev2)
     loss_net2       = F.cross_entropy( call2, y )
-    loss2 = loss_net2  + loss_prior_met2
-
-    # mu2.grad.zero_()
-    # rho2.grad.zero_()
-    # w2.grad.zero_()
+    # print(loss_net2)
+    # print(loss_prior_met2)
+    loss2 = loss_net2  #+ loss_prior_met2
 
     loss2.backward()
-    # print(BayesianNetwork_2.Linear_layer[0].mu.weight, BayesianNetwork_2.Linear_layer[0].mu.weight.grad)
+    BayesianNetwork_2.Linear_layer[0].mu.weight.data = BayesianNetwork_2.Linear_layer[0].mu.weight.data + 0.001*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
 
-    BayesianNetwork_2.Linear_layer[0].mu.weight.data  = BayesianNetwork_2.Linear_layer[0].mu.weight.data + 0.01*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
-
-    print( BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() )
-    print( '#############################################################' )
-    print( BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() )
+    print( (BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy()).sum() )
     
     assert ( BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() == BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()  ).all()
 

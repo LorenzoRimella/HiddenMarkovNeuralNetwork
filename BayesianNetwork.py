@@ -23,8 +23,11 @@ class muParameter(nn.Module):
             # self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -np.sqrt(1/in_features), +np.sqrt(1/in_features), (out_features              ) ), dtype=torch.float64 ) )
 
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features, in_features) ),  dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features              ) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (out_features             ) ), dtype=torch.float64 ) )
 
+        elif muParameter_init == "initial":
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features, in_features) ),  dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features             ) ), dtype=torch.float64 ) )           
 
         else:
             self.weight = nn.Parameter( muParameter_init.weight.clone().detach() )
@@ -49,6 +52,10 @@ class rhoParameter(nn.Module):
         if rhoParameter_init == False:
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features, in_features) ), dtype=torch.float64 ) )
             self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -5, (out_features             ) ), dtype=torch.float64 ) )
+
+        elif rhoParameter_init == "initial":
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features             ) ), dtype=torch.float64 ) )
 
         else:
             self.weight = nn.Parameter( rhoParameter_init.weight.clone().detach() )
@@ -98,6 +105,10 @@ class LinearBayesianGaussian(nn.Module):
         if LinearBayesianGaussian_init == False:
             self.mu  = muParameter( in_features, out_features)
             self.rho = rhoParameter(in_features, out_features)
+
+        elif LinearBayesianGaussian_init == "initial":
+            self.mu  = muParameter( in_features, out_features, LinearBayesianGaussian_init )
+            self.rho = rhoParameter(in_features, out_features, LinearBayesianGaussian_init )
 
         else:
             self.mu  = muParameter( in_features, out_features, LinearBayesianGaussian_init.mu )
@@ -158,6 +169,10 @@ class BayesianNetwork(nn.Module):
 
             for layer in range(self.depth-1):
                 self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1]) )
+
+        elif BayesianNetwork_init == "initial":
+             for layer in range(self.depth-1):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], "initial") )           
 
         else:
             for layer in range(self.depth-1):
@@ -260,10 +275,10 @@ class BayesianNetwork(nn.Module):
         sigma_prev = torch.log1p( torch.exp( rho_prev ) )
 
         # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
-        mu_prev_check = (self.alpha_k!=0)*mu_prev
-        mu_new_check  = (self.alpha_k!=0)*mu_new
+        # mu_prev_check = (self.alpha_k != 0)*mu_prev
+        # mu_new_check  = (self.alpha_k != 0)*mu_new
 
-        log_pw     = self.get_gaussianlogkernelprior( w, mu_prev_check, sigma_prev, mu_new_check)
+        log_pw     = self.get_gaussianlogkernelprior( w, mu_prev, sigma_prev, mu_new)
         log_pw_sum = (log_pw).sum()
 
         # print( "new" )
@@ -323,7 +338,7 @@ class torchHHMnet(nn.Module):
         self.workers = workers
 
 
-        initial_model = BayesianNetwork( self.architecture )
+        initial_model = BayesianNetwork( self.architecture, "initial" )
 
         self.model_list = list()
         self.model_list.append(initial_model)
@@ -333,8 +348,11 @@ class torchHHMnet(nn.Module):
     def forward_pass(self, tr_x, tr_y, x_val, y_val):
 
         t = 0
-        # call the initial model for initialization
+        # call the initial model for initialization and so call the stack
         call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
+
+        #create an initial condition with mu different from 0
+        initial_cond = BayesianNetwork( self.architecture )
 
         while t < (self.T):
 
@@ -347,10 +365,10 @@ class torchHHMnet(nn.Module):
             self.alpha_k = ( self.alpha_k_user )*( t > 1 )
             # print( "alpha_k ", self.alpha_k )
 
-            new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, self.model_list[t-1] )
+            new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
 
             self.model_list.append(new_model)
-            self.model_list[t-1].zero_grad()
+            initial_cond.zero_grad()
 
             x = tr_x[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
             y = tr_y[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
@@ -360,7 +378,7 @@ class torchHHMnet(nn.Module):
             # x = x[idx]
             # y = y[idx]
 
-            tr_x_tensor = torch.tensor(x, dtype = torch.float64)
+            tr_x_tensor = torch.tensor( x, dtype = torch.float64)
             # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
             tr_y_tensor = torch.tensor( y, dtype = torch.long)
 
@@ -375,7 +393,7 @@ class torchHHMnet(nn.Module):
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-            mu_new = mu_prev.clone().detach() # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach()
+            mu_new = ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # mu_prev.clone().detach() # 
 
             for epoch in range(self.epocs):
 
@@ -383,8 +401,8 @@ class torchHHMnet(nn.Module):
                 print(string)
 
                 for batch in train_loader:
-                    self.model_list[t].zero_grad()
-                    # optimizer.zero_grad()
+                    # self.model_list[t].zero_grad()
+                    optimizer.zero_grad()
 
                     network_output      = self.model_list[t]( batch[0] )
                     # print(batch[0])
@@ -416,7 +434,7 @@ class torchHHMnet(nn.Module):
                 val_performance = sum(y_val == y_predicted)/len(y_val)
                 print("Performance: ", val_performance)
 
-            del optimizer
+            initial_cond = self.model_list[t]
 
 
     # ##########################################
@@ -438,3 +456,45 @@ class torchHHMnet(nn.Module):
     #     y_t = np.array( range(0, 10) )[ output_softmax.data.numpy()==max(final.data.numpy())]
 
     #     return({'y': y_t, 'proby': output_softmax.data.numpy()})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# a = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (10, 10) ),  dtype=torch.float64 ) )
+# b = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (10) ),  dtype=torch.float64 ) )
+# ab_stack = torch.cat( ( a.view( 10*10 ), b ), dim = 0 )
+
+# optimizer = optim.SGD((a, b), lr = 0.001)
+# optimizer.zero_grad()
+
+# loss = torch.exp(ab_stack).sum()
+# loss.backward()
+
+# a.grad
+# b.grad
+
+# ab_stack.grad
