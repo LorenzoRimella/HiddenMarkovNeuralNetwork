@@ -500,7 +500,7 @@ def test_evolution():
     optimizer1.step()
 
 
-    optimizer2 = optim.SGD( BayesianNetwork_2.parameters(), lr = 0.01 )
+    optimizer2 = optim.SGD( BayesianNetwork_2.parameters(), lr = 0.001 )
     optimizer2.zero_grad()    
 
     mu_prev2, rho_prev2, w_prev2 = BayesianNetwork_prev.stack()
@@ -514,11 +514,11 @@ def test_evolution():
     loss2 = loss_net2  #+ loss_prior_met2
 
     loss2.backward()
-    BayesianNetwork_2.Linear_layer[0].mu.weight.data = BayesianNetwork_2.Linear_layer[0].mu.weight.data + 0.001*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
+    BayesianNetwork_2.Linear_layer[0].mu.weight.data = BayesianNetwork_2.Linear_layer[0].mu.weight.data - 0.001*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
 
     print( (BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy()).sum() )
     
-    assert ( BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() == BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()  ).all()
+    assert ( (BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()) < np.exp(-10)  ).all()
 
 
 
