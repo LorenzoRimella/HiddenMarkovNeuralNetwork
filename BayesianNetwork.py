@@ -51,8 +51,8 @@ class rhoParameter(nn.Module):
         self.out_features = out_features
 
         if rhoParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -7, -6, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -7, -6, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features             ) ), dtype=torch.float64 ) )
 
         elif rhoParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
@@ -307,7 +307,7 @@ class torchHHMnet(nn.Module):
     def __init__(self, architecture,
                  alpha_k = 0.5, sigma_k = np.exp(-1), c = np.exp(7),
                  pi = 0.5, p = 1.0,
-                 loss_function = F.cross_entropy,
+                 loss_function = torch.nn.CrossEntropyLoss(reduction = "mean"),
                 #  optimizer_choice = optim.Adam,
                  sample_size = 2000, minibatch_size = 128, epocs = 40,
                  T = 300, sliding =100,
@@ -339,7 +339,7 @@ class torchHHMnet(nn.Module):
         self.workers = workers
 
 
-        initial_model = BayesianNetwork( self.architecture, "initial" )
+        initial_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, "initial" )
 
         self.model_list = list()
         self.model_list.append(initial_model)
@@ -353,7 +353,7 @@ class torchHHMnet(nn.Module):
         call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
 
         #create an initial condition with mu different from 0
-        initial_cond = BayesianNetwork( self.architecture )
+        initial_cond = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p )
 
         while t < (self.T):
 
@@ -389,8 +389,8 @@ class torchHHMnet(nn.Module):
             iterations = int(self.sample_size/self.minibatch_size)
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
-            optimizer =  optim.Adam(self.model_list[t].parameters())
-            # optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            # optimizer =  optim.Adam(self.model_list[t].parameters())
+            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()

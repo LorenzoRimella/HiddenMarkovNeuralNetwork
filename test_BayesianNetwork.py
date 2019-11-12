@@ -101,12 +101,12 @@ def test_Linear_reparam_trick():
     Linear1      = LinearBayesianGaussian(10, 100)
 
     with torch.no_grad():
-        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype=torch.float64 ) )
-        #Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( 0, 1, (100, 10) ), dtype=torch.float64 ) )
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype  = torch.float64 ) )
+        Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( -20, -20, (100, 10) ), dtype = torch.float64 ) )
 
-    output = Linear1( torch.tensor( np.random.uniform( 0, 0, (10) ), dtype=torch.float64 ) )
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (10) ), dtype = torch.float64 ) )
 
-    loss   = output.sum() + (Linear1.mu.weight*Linear1.mu.weight).sum()
+    loss   = output.sum() + (Linear1.mu.weight*Linear1.mu.weight).sum() + (2*Linear1.rho.weight).sum()
     loss.backward()
 
     # The derivative of a composition of function in this case is given by all 0 because the inputs are 0
@@ -114,8 +114,9 @@ def test_Linear_reparam_trick():
     # given by all 2*2 (all the mu are 2 and then derive a square function)
     #
     # print(Linear1.mu.weight.grad)
+    # print(Linear1.rho.weight.grad)
 
-    assert (Linear1.mu.weight.grad.data.numpy() == 4).all()
+    assert ( (Linear1.mu.weight.grad.data.numpy() == 5).all() and (np.abs(Linear1.rho.weight.grad.data.numpy()- 2) < np.exp(-15)).all() )
 
 
 
@@ -124,11 +125,11 @@ def test_Linear_multi_input():
     Linear1      = LinearBayesianGaussian(10, 1)
 
     with torch.no_grad():
-        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (1, 10) ), dtype=torch.float64 ) )
-        Linear1.mu.bias.copy_( torch.tensor( np.random.uniform( 0, 0, (1) ), dtype=torch.float64 ) )
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (1, 10) ), dtype = torch.float64 ) )
+        Linear1.mu.bias.copy_( torch.tensor( np.random.uniform( 0, 0, (1) ), dtype = torch.float64 ) )
         #Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( 0, 1, (100, 10) ), dtype=torch.float64 ) )
 
-    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (20, 10) ), dtype=torch.float64 ) )
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (20, 10) ), dtype = torch.float64 ) )
 
     #print( (output.data.numpy()[0, :] == output.data.numpy()).all() )
 
@@ -374,7 +375,7 @@ def test_prior_withdiffcomp():
 
     # print(loss_prior_metnew - loss_prior_metold)
 
-    assert ( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-8) )
+    assert ( np.abs( (loss_prior_metnew.data.numpy() - loss_prior_metold.data.numpy())  < np.exp(-8) ) )
 
 
 
@@ -431,7 +432,7 @@ def test_BayesianNetwork_prior_stack_evolution():
 
     # print( BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()) )
 
-    assert ( (BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()-10)) < np.exp(-5) ).all()
+    assert ( np.abs( (BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()-10)) < np.exp(-5) ) ).all()
 
 def test_evolution():
 
@@ -517,9 +518,9 @@ def test_evolution():
     loss2.backward()
     BayesianNetwork_2.Linear_layer[0].mu.weight.data = BayesianNetwork_2.Linear_layer[0].mu.weight.data - 0.001*BayesianNetwork_2.Linear_layer[0].mu.weight.grad.data
 
-    print( (BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy()).sum() )
+    # print( (np.abs(BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy())).sum() )
     
-    assert ( (BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()) < np.exp(-10)  ).all()
+    assert ( np.abs( (BayesianNetwork_2.Linear_layer[0].mu.weight.data.numpy() - BayesianNetwork_1.Linear_layer[0].mu.weight.data.numpy()) < np.exp(-10) ) ).all()
 
 
 
