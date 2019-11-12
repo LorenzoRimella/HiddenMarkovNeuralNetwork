@@ -458,6 +458,33 @@ def test_BayesianNetwork_prior_stack_evolution():
 
     assert ( np.abs( (BayesianNetwork_prova1.Linear_layer[0].mu.weight.grad.data.numpy() - (BayesianNetwork_prova2.Linear_layer[0].mu.weight.grad.data.numpy()-10)) < np.exp(-5) ) ).all()
 
+
+
+def test_stack_index():
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+
+    dim   = np.array([10, 30, 10])
+    L       = 3
+
+    BayesianNetwork_prev = BayesianNetwork( dim )
+              
+    BayesianNetwork_1    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev, p = 0.8)
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice( range(0, 10), 20 ), dtype= torch.long )
+ 
+    torch.manual_seed(0)
+    np.random.seed(0)
+    call1      = BayesianNetwork_1(x)
+
+    mu, rho, w = BayesianNetwork_1.stack()
+
+    assert (mu[-(dim[L-2]*dim[L-1]+dim[L-1]):] == BayesianNetwork_1.Linear_layer[L-2].mu.stack()).all()
+
+
+
 def test_evolution():
 
     torch.manual_seed(0)
