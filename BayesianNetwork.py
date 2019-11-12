@@ -51,8 +51,8 @@ class rhoParameter(nn.Module):
         self.out_features = out_features
 
         if rhoParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -6, -5, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -6, -5, (out_features             ) ), dtype=torch.float64 ) )
 
         elif rhoParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
@@ -74,12 +74,16 @@ class rhoParameter(nn.Module):
 # Define a class of Gaussian for the reparam trick
 ##############################################################################################
 
-class Gaussian(object):
-    def __init__(self, mu, rho):
+
+class Gaussian_dropconnect(object):
+    def __init__(self, mu, rho, p = 1):
         super().__init__()
         self.mu = mu
         self.rho = rho
-        self.normal = torch.distributions.Normal(0,1)
+        self.p = p
+
+        self.normal    = torch.distributions.Normal(0,1)
+        self.bernoulli = torch.distributions.bernoulli.Bernoulli(self.p)
     
     @property
     def sigma(self):
@@ -87,7 +91,8 @@ class Gaussian(object):
     
     def sample(self):
         epsilon = self.normal.sample(self.rho.size())
-        return self.mu + self.sigma * epsilon
+        mask    = self.bernoulli.sample(self.mu.size())
+        return self.mu * mask + self.sigma * epsilon
 
 
 
@@ -97,11 +102,13 @@ class Gaussian(object):
 
 class LinearBayesianGaussian(nn.Module):
 
-    def __init__(self, in_features, out_features, LinearBayesianGaussian_init = False):
+    def __init__(self, in_features, out_features, LinearBayesianGaussian_init = False, p = 1):
         super().__init__()
 
         self.in_features  = in_features
         self.out_features = out_features
+
+        self.p = p
 
         if LinearBayesianGaussian_init == False:
             self.mu  = muParameter( in_features, out_features)
@@ -115,8 +122,8 @@ class LinearBayesianGaussian(nn.Module):
             self.mu  = muParameter( in_features, out_features, LinearBayesianGaussian_init.mu )
             self.rho = rhoParameter(in_features, out_features, LinearBayesianGaussian_init.rho)
 
-        self.w_weight_rv = Gaussian( self.mu.weight, self.rho.weight )
-        self.w_bias_rv   = Gaussian( self.mu.bias  , self.rho.bias  )     
+        self.w_weight_rv = Gaussian_dropconnect( self.mu.weight, self.rho.weight, self.p )
+        self.w_bias_rv   = Gaussian_dropconnect( self.mu.bias  , self.rho.bias,   self.p )     
 
 
     def forward(self, input):
@@ -168,16 +175,22 @@ class BayesianNetwork(nn.Module):
 
         if BayesianNetwork_init == False:
 
-            for layer in range(self.depth-1):
-                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1]) )
+            for layer in range(self.depth-2):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], p = self.p) )
+
+            self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer+1], self.architecture[layer+2], p = 1) )
 
         elif BayesianNetwork_init == "initial":
-             for layer in range(self.depth-1):
-                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], "initial") )           
+            for layer in range(self.depth-2):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], "initial", p = self.p) )
+
+            self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer+1], self.architecture[layer+2], "initial", p = 1) )           
 
         else:
-            for layer in range(self.depth-1):
-                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], BayesianNetwork_init.Linear_layer[layer]) )
+            for layer in range(self.depth-2):
+                self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], BayesianNetwork_init.Linear_layer[layer], p = self.p) )
+
+            self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer+1], self.architecture[layer+2], BayesianNetwork_init.Linear_layer[layer+1], p = 1) )
 
 
     def forward(self, x):
@@ -276,8 +289,8 @@ class BayesianNetwork(nn.Module):
         sigma_prev = torch.log1p( torch.exp( rho_prev ) )
 
         # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
-        # mu_prev_check = (self.alpha_k != 0)*mu_prev
-        # mu_new_check  = (self.alpha_k != 0)*mu_new
+        mu_prev_check = (self.alpha_k != 0)*mu_prev
+        mu_new_check  = (self.alpha_k != 0)*mu_new
 
         log_pw     = self.get_gaussianlogkernelprior( w, mu_prev, sigma_prev, mu_new)
         log_pw_sum = (log_pw).sum()
@@ -389,8 +402,8 @@ class torchHHMnet(nn.Module):
             iterations = int(self.sample_size/self.minibatch_size)
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
-            # optimizer =  optim.Adam(self.model_list[t].parameters())
-            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            optimizer =  optim.Adam(self.model_list[t].parameters())
+            # optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 0.0001) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
@@ -474,28 +487,3 @@ class torchHHMnet(nn.Module):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-# a = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (10, 10) ),  dtype=torch.float64 ) )
-# b = nn.Parameter( torch.tensor( np.random.uniform( -0.2, +0.2, (10) ),  dtype=torch.float64 ) )
-# ab_stack = torch.cat( ( a.view( 10*10 ), b ), dim = 0 )
-
-# optimizer = optim.SGD((a, b), lr = 0.001)
-# optimizer.zero_grad()
-
-# loss = torch.exp(ab_stack).sum()
-# loss.backward()
-
-# a.grad
-# b.grad
-
-# ab_stack.grad

@@ -120,6 +120,30 @@ def test_Linear_reparam_trick():
 
 
 
+def test_Linear_reparam_trick_be():
+
+    Linear1      = LinearBayesianGaussian(10, 100, p = 0.5)
+
+    with torch.no_grad():
+        Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype  = torch.float64 ) )
+        Linear1.rho.weight.copy_( torch.tensor( np.random.uniform( -20, -20, (100, 10) ), dtype = torch.float64 ) )
+
+    output = Linear1( torch.tensor( np.random.uniform( 1, 1, (10) ), dtype = torch.float64 ) )
+
+    loss   = output.sum() + (Linear1.mu.weight*Linear1.mu.weight).sum() + (2*Linear1.rho.weight).sum()
+    loss.backward()
+
+    # The derivative of a composition of function in this case is given by all 0 because the inputs are 0
+    # The reparam trick add to this derivative the derivative of the loss function wrt mu that is in this case
+    # given by all 2*2 (all the mu are 2 and then derive a square function)
+    #
+    # print((Linear1.mu.weight.grad.data.numpy() == 5).sum()/1000)
+    # print(Linear1.rho.weight.grad)
+
+    assert ( ((Linear1.mu.weight.grad.data.numpy() == 5).sum()/1000)<0.6 and ((Linear1.mu.weight.grad.data.numpy() == 5).sum()/1000)>0.4 and (np.abs(Linear1.rho.weight.grad.data.numpy()- 2) < np.exp(-15)).all() )
+
+
+
 def test_Linear_multi_input():
 
     Linear1      = LinearBayesianGaussian(10, 1)
