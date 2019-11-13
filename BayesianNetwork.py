@@ -323,8 +323,9 @@ class BayesianNetwork(nn.Module):
         sigma_prev = torch.log1p( torch.exp( rho_prev ) )
 
         # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
-        mu_prev_check = (self.alpha_k != 0)*mu_prev
-        mu_new_check  = (self.alpha_k != 0)*mu_new
+        with torch.no_grad():
+            mu_prev.copy_( (self.alpha_k != 0)*mu_prev.data )
+            mu_new.copy_(  (self.alpha_k != 0)*mu_new.data )
 
         mu_prev_last = mu_prev[-split:]
         mu_new_last  = mu_new[-split:]
@@ -461,6 +462,7 @@ class torchHHMnet(nn.Module):
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
             mu_new = ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # mu_prev.clone().detach() # 
+
 
             for epoch in range(self.epocs):
 
