@@ -13,7 +13,7 @@ import numpy as np
 
 def test_mu_without_initial():
 
-    mu = muParameter(10, 100)
+    mu = muParameter(10, 100, muParameter_init = False)
 
     assert ( mu.weight.data.numpy().shape[1] == 10 and mu.weight.data.numpy().shape[0] == 100 and mu.bias.data.numpy().shape[0] == 100 )
 
@@ -21,7 +21,7 @@ def test_mu_without_initial():
 
 def test_rho_without_initial():
 
-    rho = rhoParameter(10, 100)
+    rho = rhoParameter(10, 100, rhoParameter_init = False)
 
     assert ( rho.weight.data.numpy().shape[1] == 10 and rho.weight.data.numpy().shape[0] == 100 and rho.bias.data.numpy().shape[0] == 100 )
 
@@ -29,7 +29,7 @@ def test_rho_without_initial():
 
 def test_mu_with_initial():
 
-    mu_prev = muParameter(10, 100)
+    mu_prev = muParameter(10, 100, muParameter_init = False)
     mu      = muParameter(10, 100, mu_prev)
 
     check1 = ( mu.weight.data.numpy() == mu_prev.weight.data.numpy() ).all()
@@ -43,7 +43,7 @@ def test_mu_with_initial():
 
 def test_rho_with_initial():
 
-    rho_prev = rhoParameter(10, 100)
+    rho_prev = rhoParameter(10, 100, rhoParameter_init = False)
     rho      = rhoParameter(10, 100, rho_prev)
 
     assert ( rho.weight.data.numpy() == rho_prev.weight.data.numpy() ).all()
@@ -51,8 +51,8 @@ def test_rho_with_initial():
 
 def test_stack():
 
-    mu  = muParameter(10, 10 )
-    rho = rhoParameter(10, 10 )
+    mu  = muParameter(10, 10,   muParameter_init = False )
+    rho = rhoParameter(10, 10, rhoParameter_init = False )
 
     mu_stack  = mu.stack()
     rho_stack = rho.stack()
@@ -67,7 +67,7 @@ def test_stack():
 
 def test_Linear_without_initial():
 
-    Linear1 = LinearBayesianGaussian(10, 100)
+    Linear1 = LinearBayesianGaussian(10, 100, LinearBayesianGaussian_init = False, p = 1)
 
     assert ( ( Linear1.mu.weight.data.numpy().shape[1] == 10 and Linear1.mu.weight.data.numpy().shape[0] == 100 and Linear1.mu.bias.data.numpy().shape[0] == 100 ) and
              ( Linear1.rho.weight.data.numpy().shape[1] == 10 and Linear1.rho.weight.data.numpy().shape[0] == 100 and Linear1.rho.bias.data.numpy().shape[0] == 100 ))
@@ -76,8 +76,8 @@ def test_Linear_without_initial():
 
 def test_Linear_with_initial():
 
-    Linear1_prev = LinearBayesianGaussian(10, 100)
-    Linear1      = LinearBayesianGaussian(10, 100, Linear1_prev)
+    Linear1_prev = LinearBayesianGaussian(10, 100, LinearBayesianGaussian_init = False, p = 1)
+    Linear1      = LinearBayesianGaussian(10, 100, Linear1_prev, p =1)
 
     assert ( Linear1_prev.rho.weight.data.numpy() == Linear1_prev.rho.weight.data.numpy() ).all()
 
@@ -85,7 +85,7 @@ def test_Linear_with_initial():
 
 def test_Linear_w_values():
 
-    Linear1      = LinearBayesianGaussian(10, 100)
+    Linear1      = LinearBayesianGaussian(10, 100, LinearBayesianGaussian_init = False, p = 1)
 
     with torch.no_grad():
         Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 1, 1, (100, 10) ), dtype=torch.float64 ) )
@@ -98,7 +98,7 @@ def test_Linear_w_values():
 
 def test_Linear_reparam_trick():
 
-    Linear1      = LinearBayesianGaussian(10, 100)
+    Linear1      = LinearBayesianGaussian(10, 100, LinearBayesianGaussian_init = False, p = 1)
 
     with torch.no_grad():
         Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype  = torch.float64 ) )
@@ -122,7 +122,7 @@ def test_Linear_reparam_trick():
 
 def test_Linear_reparam_trick_be():
 
-    Linear1      = LinearBayesianGaussian(10, 100, p = 0.5)
+    Linear1      = LinearBayesianGaussian(10, 100, LinearBayesianGaussian_init = False, p = 0.5)
 
     with torch.no_grad():
         Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (100, 10) ), dtype  = torch.float64 ) )
@@ -146,7 +146,7 @@ def test_Linear_reparam_trick_be():
 
 def test_Linear_multi_input():
 
-    Linear1      = LinearBayesianGaussian(10, 1)
+    Linear1      = LinearBayesianGaussian(10, 1, LinearBayesianGaussian_init = False, p = 1)
 
     with torch.no_grad():
         Linear1.mu.weight.copy_( torch.tensor( np.random.uniform( 2, 2, (1, 10) ), dtype = torch.float64 ) )
@@ -169,7 +169,7 @@ def test_Linear_multi_input():
 
 def test_Linear_stack():
 
-    Linear_stack = LinearBayesianGaussian(10, 10)
+    Linear_stack = LinearBayesianGaussian(10, 10, LinearBayesianGaussian_init = False, p = 1)
     output = Linear_stack( torch.tensor( np.random.uniform( 1, 1, (20, 10) ), dtype=torch.float64 ) )
 
     mu_stack, rho_stack, w_stack = Linear_stack.stack()
@@ -183,8 +183,14 @@ def test_Linear_stack():
 def test_BayesianNetwork_without_initial():
 
     dim   = np.array([10, 30, 100])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork1 = BayesianNetwork(dim)
+    BayesianNetwork1 = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
 
     # print(BayesianNetwork1.Linear_layer[0].mu.weight.shape)
     # print(BayesianNetwork1.Linear_layer[1].rho.bias.shape)
@@ -198,9 +204,15 @@ def test_BayesianNetwork_without_initial():
 def test_BayesianNetwork_with_initial():
 
     dim   = np.array([10, 30, 100])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork1_prev = BayesianNetwork(dim)
-    BayesianNetwork1      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork1_prev)
+    BayesianNetwork1_prev = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
+    BayesianNetwork1      = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork1_prev)
 
     check1 = (BayesianNetwork1.Linear_layer[0].mu.weight.data.numpy() ==  BayesianNetwork1_prev.Linear_layer[0].mu.weight.data.numpy() ).all()
 
@@ -218,9 +230,15 @@ def test_BayesianNetwork_with_initial():
 def test_BayesianNetwork_input():
 
     dim   = np.array([10, 30, 10])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prova_prev = BayesianNetwork(dim)
-    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova_prev = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
+    BayesianNetwork_prova      = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     new_weights = torch.tensor( BayesianNetwork_prova.Linear_layer[1].mu.bias.data.numpy() + 2 )
     BayesianNetwork_prova.Linear_layer[1].mu.bias.data = new_weights
@@ -253,9 +271,15 @@ def test_BayesianNetwork_input():
 def test_BayesianNetwork_update():
 
     dim   = np.array([10, 30, 10])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prova_prev = BayesianNetwork(dim)
-    BayesianNetwork_prova      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova_prev = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
+    BayesianNetwork_prova      = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
     # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
@@ -286,8 +310,14 @@ def test_BayesianNetwork_update():
 def test_BayesianNetwork_stack():
 
     dim   = np.array([10, 30, 10])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_stack = BayesianNetwork(dim)
+    BayesianNetwork_stack = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
     
     x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
 
@@ -302,10 +332,16 @@ def test_BayesianNetwork_stack():
 def test_BayesianNetwork_prior():
 
     dim   = np.array([10, 30, 10])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c       = np.exp(7)
+    pi      = 0.5
+    p       = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prova_prev_prev = BayesianNetwork(dim)
-    BayesianNetwork_prova_prev      = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev_prev)
-    BayesianNetwork_prova           = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova_prev_prev = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
+    BayesianNetwork_prova_prev      = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev_prev)
+    BayesianNetwork_prova           = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     # print( BayesianNetwork_prova.Linear_layer[1].mu.weight.data.numpy()[5, :] )
     # print( BayesianNetwork_prova_prev.Linear_layer[1].mu.weight.data.numpy()[5, :] )
@@ -351,13 +387,52 @@ def test_BayesianNetwork_prior():
 
 
 
+def test_BayesianNetwork_priorvariance():
+
+    dim   = np.array([10, 30, 10])
+    alpha_k = 0.0
+    sigma_k = np.exp(-1)
+    c= np.exp(7)
+    pi = 0.5
+    p = 1.0
+    BayesianNetwork_init = False
+
+    BayesianNetwork_prova_prev      = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init)
+    BayesianNetwork_prova           = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
+
+    x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
+    y = torch.tensor( np.random.choice(range(0, 10), 20) , dtype= torch.long)
+
+    call         = BayesianNetwork_prova_prev(x)
+    output_prova = BayesianNetwork_prova(x)
+
+    mu_prev, rho_prev, w_prev = BayesianNetwork_prova_prev.stack()
+    print(mu_prev)
+    loss_prior1   = BayesianNetwork_prova.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
+    # print( loss_prior1 )
+
+    mu_prev.copy_( 10+ mu_prev.clone().detach().zero_() )
+    rho_prev.copy_( 10 + rho_prev.clone().detach().zero_() )
+    loss_prior2   = BayesianNetwork_prova.get_gaussiandistancefromprior(mu_prev, mu_prev, rho_prev)
+    # print( loss_prior2 )
+
+    assert loss_prior1.data.numpy() == loss_prior2.data.numpy()
+
+
+
 def test_prior_withdiffcomp():
 
     dim   = np.array([10, 30, 10])
     L       = 3
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c= np.exp(7)
+    pi = 0.5
+    p = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prova_prev      = BayesianNetwork( dim )
-    BayesianNetwork_prova           = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova_prev      = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init )
+    BayesianNetwork_prova           = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
 
@@ -406,10 +481,16 @@ def test_prior_withdiffcomp():
 def test_BayesianNetwork_prior_stack_evolution():
 
     dim   = np.array([10, 30, 10])
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c= np.exp(7)
+    pi = 0.5
+    p = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prova_prev = BayesianNetwork(dim )
-    BayesianNetwork_prova1     = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
-    BayesianNetwork_prova2     = BayesianNetwork(dim, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova_prev = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init )
+    BayesianNetwork_prova1     = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
+    BayesianNetwork_prova2     = BayesianNetwork(dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prova_prev)
 
     optimizer1 = optim.Adam(BayesianNetwork_prova1.parameters())
     optimizer1.zero_grad()
@@ -467,10 +548,15 @@ def test_stack_index():
 
     dim   = np.array([10, 30, 10])
     L       = 3
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c= np.exp(7)
+    pi = 0.5
+    p = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prev = BayesianNetwork( dim )
-              
-    BayesianNetwork_1    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev, p = 0.8)
+    BayesianNetwork_prev = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init )
+    BayesianNetwork_1    = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p = 0.8, BayesianNetwork_init = BayesianNetwork_prev)
 
     x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
     y = torch.tensor( np.random.choice( range(0, 10), 20 ), dtype= torch.long )
@@ -492,11 +578,16 @@ def test_evolution():
 
     dim   = np.array([10, 30, 10])
     L       = 3
+    alpha_k = 0.5
+    sigma_k = np.exp(-1)
+    c= np.exp(7)
+    pi = 0.5
+    p = 1.0
+    BayesianNetwork_init = False
 
-    BayesianNetwork_prev = BayesianNetwork( dim )
-              
-    BayesianNetwork_1    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev)
-    BayesianNetwork_2    = BayesianNetwork( dim, BayesianNetwork_init = BayesianNetwork_prev)
+    BayesianNetwork_prev = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init )   
+    BayesianNetwork_1    = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prev)
+    BayesianNetwork_2    = BayesianNetwork( dim, alpha_k, sigma_k, c, pi, p, BayesianNetwork_init = BayesianNetwork_prev)
 
     x = torch.tensor( np.random.uniform( 0, 5, (20, 10) ), dtype= torch.float64 ) 
     y = torch.tensor( np.random.choice( range(0, 10), 20 ), dtype= torch.long )
