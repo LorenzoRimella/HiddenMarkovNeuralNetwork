@@ -51,8 +51,8 @@ class rhoParameter(nn.Module):
         self.out_features = out_features
 
         if rhoParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -4, -3, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -4, -3, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -3, -2, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -3, -2, (out_features             ) ), dtype=torch.float64 ) )
 
         elif rhoParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
@@ -412,7 +412,7 @@ class torchHHMnet(nn.Module):
 
 
 
-    def forward_pass(self, tr_x, tr_y, x_val, y_val):
+    def forward_pass(self, tr_x, tr_y, x_val, y_val, montecarlo_approx):
 
         t = 0
         # call the initial model for initialization and so call the stack
@@ -456,9 +456,9 @@ class torchHHMnet(nn.Module):
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
             # if t ==1:    
-            optimizer =  optim.Adam(self.model_list[t].parameters())
-            # else:    
-            #     optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 1e-3) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+#             optimizer =  optim.Adam(self.model_list[t].parameters())
+#             else:    
+            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 1e-4) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
  
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
@@ -474,15 +474,20 @@ class torchHHMnet(nn.Module):
                     # self.model_list[t].zero_grad()
                     optimizer.zero_grad()
 
-                    network_output      = self.model_list[t]( batch[0] )
-                    # print(batch[0])
-                    loss_network_output = self.loss_function( network_output, batch[1] )
-                    # print(batch[1].squeeze(1))
+                    loss_final = torch.tensor( np.array([0.0]) ).double()
 
-                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
+                    for montecarlo in range(montecarlo_approx):
 
-                    loss_final = loss_network_output + loss_prior
+                        network_output      = self.model_list[t]( batch[0] )
+                        # print(batch[0])
+                        loss_network_output = self.loss_function( network_output, batch[1] )
+                        # print(batch[1].squeeze(1))
 
+                        loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
+
+                        loss_final = loss_final + loss_network_output + loss_prior
+                    
+                    loss_final = ( 1/montecarlo_approx )*loss_final
                     loss_final.backward()
 
                     optimizer.step()
