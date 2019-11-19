@@ -240,7 +240,7 @@ class BayesianNetwork(nn.Module):
     def get_gaussianlogkernelprior(self, x, mu_prev, sigma_prev, mu_new, p):
 
         with torch.no_grad():
-            mu_new     = mu_new.clone().detach()
+            # mu_new     = mu_new.clone().detach()
             mu_prev    = mu_prev.clone().detach()
             sigma_prev = sigma_prev.clone().detach()
 
@@ -366,7 +366,8 @@ class torchHHMnet(nn.Module):
 
     # all the default values are derived from MNIST application
     def __init__(self, architecture,
-                 alpha_k, sigma_k, c,
+                 alpha_k,
+                 sigma_k, c,
                  pi, p,
                  loss_function,
                 #  optimizer_choice = optim.Adam,
@@ -379,13 +380,10 @@ class torchHHMnet(nn.Module):
         self.architecture  = architecture
         self.depth         = self.architecture.shape[0]
 
-        self.alpha_k_user = alpha_k
-        self.alpha_k      = alpha_k
-
-        self.sigma_k = sigma_k
-        self.pi      = pi
-        self.p       = p
-        self.c       = c
+        self.sigma_k = nn.Parameter( torch.tensor( sigma_k, dtype = torch.float64 ) )
+        self.pi      = nn.Parameter( torch.tensor( pi     , dtype = torch.float64 ) )
+        self.p       = nn.Parameter( torch.tensor( p      , dtype = torch.float64 ) )
+        self.c       = nn.Parameter( torch.tensor( c      , dtype = torch.float64 ) )
 
         # self.optimizer_choice = optimizer_choice
         self.loss_function    = loss_function
@@ -397,13 +395,15 @@ class torchHHMnet(nn.Module):
         self.sliding          = sliding
         self.T                = T
 
+        self.alpha_k_user = alpha_k
+
         self.workers = workers
 
 
-        initial_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, "initial" )
+        initial_model = BayesianNetwork( self.architecture, 0.0, self.sigma_k, self.c, self.pi, self.p, "initial" )
 
         self.model_list = list()
-        self.model_list.append(initial_model)
+        self.model_list.append( initial_model )
 
 
 
@@ -414,11 +414,12 @@ class torchHHMnet(nn.Module):
         call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
 
         #create an initial condition with mu different from 0
-        initial_cond = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, False )
+        initial_cond = BayesianNetwork( self.architecture, 0.0, self.sigma_k, self.c, self.pi, self.p, False )
 
         # set the previous value of mu, rho
         mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-        mu_new = mu_prev.clone().detach().zero_() # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
+        self.mu_new       = nn.Parameter( mu_prev.clone().detach().zero_() ) # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
+        self.alpha_k      = nn.Parameter( torch.tensor(0.0, dtype = torch.float64) )
 
         while t < (self.T):
 
@@ -428,11 +429,11 @@ class torchHHMnet(nn.Module):
             print(string)
 
             # the first time step does not depend
-            self.alpha_k = ( self.alpha_k_user )*( t > 1 )
+            
             # print( "alpha_k ", self.alpha_k )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
-
+            
             self.model_list.append(new_model)
             # initial_cond.zero_grad()
 
@@ -444,21 +445,28 @@ class torchHHMnet(nn.Module):
             # x = x[idx]
             # y = y[idx]
 
-            tr_x_tensor = torch.tensor( x, dtype = torch.float64)
+            tr_x_tensor = torch.tensor( x, dtype = torch.float64 )
             # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
-            tr_y_tensor = torch.tensor( y, dtype = torch.long)
+            tr_y_tensor = torch.tensor( y, dtype = torch.long )
 
             train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
             train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)
 
-            iterations = int(self.sample_size/self.minibatch_size)
+            iterations = int( self.sample_size/self.minibatch_size ) 
+
+            param_model = list(self.model_list[t].parameters())
+            param_model.remove( self.alpha_k )
+            param_model.remove( self.p )
+            param_model.remove( self.pi )
+            param_model.remove( self.sigma_k )
+            param_model.remove( self.c ) 
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
 #             if t ==1:    
 #                 print("Adam ")
             # optimizer =  optim.Adam(self.model_list[t].parameters())
 #             else:    
-            optimizer   = optim.SGD( self.model_list[t].parameters(), lr = 1e-4) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            optimizer   = optim.SGD(  param_model, lr = 1e-5) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
 
             for epoch in range(self.epocs):
 
@@ -473,12 +481,14 @@ class torchHHMnet(nn.Module):
 
                     for montecarlo in range(montecarlo_approx):
 
+                        # print(self.sigma_k, self.c, self.p, self.pi)
+
                         network_output      = self.model_list[t]( batch[0] )
                         # print(batch[0])
                         loss_network_output = self.loss_function( network_output, batch[1] )
                         # print(batch[1].squeeze(1))
 
-                        loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
+                        loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
 
                         loss_final = loss_final + loss_network_output + loss_prior
                     
@@ -502,10 +512,37 @@ class torchHHMnet(nn.Module):
 
             initial_cond = self.model_list[t]
 
-            # set the previous value of mu, rho
-            mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-            mu_now,  rho_now,  w_now  = self.model_list[t].stack()
-            mu_new = (1/t)*( mu_now.clone().detach() - self.alpha_k*mu_prev.clone().detach() ) + ((t-1)/t)*mu_prev.clone().detach()           
+            # Update new paramter
+            with torch.no_grad():
+                self.alpha_k.copy_( torch.tensor(self.alpha_k_user).double() )
+                
+            param = list( [ self.alpha_k, self.p, self.pi, self.sigma_k, self.c, self.mu_new ] )
+            optimizer_param = optim.Adam( param )
+
+
+            for epoch in range(self.epocs):
+                optimizer_param.zero_grad()
+
+                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+        
+
+                loss_final_prior = torch.tensor( np.array([0.0]) ).double()
+
+                for montecarlo in range(montecarlo_approx):
+
+                    network_output      = self.model_list[t]( batch[0] )
+                    loss_f_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
+
+                    loss_final_prior = loss_final_prior + loss_f_prior
+                
+                loss_final_prior = ( 1/montecarlo_approx )*loss_final_prior
+                loss_final_prior.backward()
+
+                optimizer_param.step()
+
+                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+        
+
 
 
 
@@ -517,8 +554,6 @@ class torchHHMnet(nn.Module):
         t = T_last
 
         mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-        mu_now,  rho_now,  w_now  = self.model_list[t].stack()
-        mu_new = (1/t)*( mu_now.clone().detach() - self.alpha_k*mu_prev.clone().detach() ) + ((t-1)/t)*mu_prev.clone().detach()  
 
         initial_cond = self.model_list[t] 
 
@@ -577,7 +612,7 @@ class torchHHMnet(nn.Module):
                     loss_network_output = self.loss_function( network_output, batch[1] )
                     # print(batch[1].squeeze(1))
 
-                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
+                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
 
                     loss_final = loss_network_output + loss_prior
 
@@ -600,30 +635,29 @@ class torchHHMnet(nn.Module):
 
             initial_cond = self.model_list[t]        
 
+            loss_final_prior = torch.tensor( np.array([0.0]) ).double()
+
+            for epoch in range(self.epocs):
+                optimizer_param.zero_grad()
+
+                for montecarlo in range(montecarlo_approx):
+
+                    network_output      = self.model_list[t]( batch[0] )
+                    loss_f_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
+
+                    loss_final_prior = loss_final_prior + loss_f_prior
+                
+                loss_final_prior = ( 1/montecarlo_approx )*loss_final_prior
+                loss_final_prior.backward()
+
+                optimizer_param.step()
+
+                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+        
+
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-            mu_now,  rho_now,  w_now  = self.model_list[t].stack()
-            mu_new = (1/t)*( mu_now.clone().detach() - self.alpha_k*mu_prev.clone().detach() ) + ((t-1)/t)*mu_prev.clone().detach()  
 
 
-    # ##########################################
-    # # Prediction
-    # ##########################################
-
-    # def pred(self, x, t):
-
-    #     x_tensor = torch.tensor( x, dtype=torch.float64)
-
-    #     for layer in range(0, self.depth-2):
-
-    #         x_tensor = F.relu( (self.model_list[t].Linear_layer[layer].performance(x_tensor) ) )
-
-    #     x_tensor = self.model_list[t].Linear_layer[self.depth-2].performance(x_tensor)
-
-    #     output_softmax = torch.nn.functional.softmax(x_tensor, dim = 0)
-
-    #     y_t = np.array( range(0, 10) )[ output_softmax.data.numpy()==max(final.data.numpy())]
-
-    #     return({'y': y_t, 'proby': output_softmax.data.numpy()})
 
 
 
