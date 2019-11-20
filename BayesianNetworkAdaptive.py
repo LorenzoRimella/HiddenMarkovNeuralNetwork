@@ -381,8 +381,8 @@ class torchHHMnet(nn.Module):
         self.depth         = self.architecture.shape[0]
 
         self.sigma_k = nn.Parameter( torch.tensor( sigma_k, dtype = torch.float64 ) )
-        self.pi      = nn.Parameter( torch.tensor( pi     , dtype = torch.float64 ) )
-        self.p       = nn.Parameter( torch.tensor( p      , dtype = torch.float64 ) )
+        self.pi      = pi # nn.Parameter( torch.tensor( pi     , dtype = torch.float64 ) )
+        self.p       = p  # nn.Parameter( torch.tensor( p      , dtype = torch.float64 ) )
         self.c       = nn.Parameter( torch.tensor( c      , dtype = torch.float64 ) )
 
         # self.optimizer_choice = optimizer_choice
@@ -419,7 +419,6 @@ class torchHHMnet(nn.Module):
         # set the previous value of mu, rho
         mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
         self.mu_new       = nn.Parameter( mu_prev.clone().detach().zero_() ) # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
-        self.alpha_k      = nn.Parameter( torch.tensor(0.0, dtype = torch.float64) )
 
         while t < (self.T):
 
@@ -431,6 +430,11 @@ class torchHHMnet(nn.Module):
             # the first time step does not depend
             
             # print( "alpha_k ", self.alpha_k )
+            if t ==1:
+                self.alpha_k      = nn.Parameter( torch.tensor(0.0, dtype = torch.float64) )
+
+            elif t==2:
+                self.alpha_k      = nn.Parameter( torch.tensor(self.alpha_k_user, dtype = torch.float64) )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
             
@@ -456,17 +460,17 @@ class torchHHMnet(nn.Module):
 
             param_model = list(self.model_list[t].parameters())
             param_model.remove( self.alpha_k )
-            param_model.remove( self.p )
-            param_model.remove( self.pi )
+            # param_model.remove( self.p )
+            # param_model.remove( self.pi )
             param_model.remove( self.sigma_k )
             param_model.remove( self.c ) 
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
 #             if t ==1:    
 #                 print("Adam ")
-            # optimizer =  optim.Adam(self.model_list[t].parameters())
+#             optimizer =  optim.Adam(self.model_list[t].parameters())
 #             else:    
-            optimizer   = optim.SGD(  param_model, lr = 1e-5) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+            optimizer   = optim.SGD(  param_model, lr = 1e-3) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
 
             for epoch in range(self.epocs):
 
@@ -503,27 +507,27 @@ class torchHHMnet(nn.Module):
                 val_performance =0
 
                 output           = self.model_list[t].performance( torch.tensor( x_val ).double() )
-                output_softmax   = F.softmax(output, dim=1)
+                output_softmax   = F.softmax( output, dim = 1 )
 
                 y_predicted = np.array( range(0, 10) )[ np.argmax( output_softmax.data.numpy(), 1 ) ]
 
-                val_performance = sum(y_val == y_predicted)/len(y_val)
+                val_performance = sum( y_val == y_predicted )/len(y_val)
                 print("Performance: ", val_performance)
 
             initial_cond = self.model_list[t]
 
             # Update new paramter
-            with torch.no_grad():
-                self.alpha_k.copy_( torch.tensor(self.alpha_k_user).double() )
+            # with torch.no_grad():
+            #     self.alpha_k.copy_( torch.tensor(self.alpha_k_user).double() )
                 
-            param = list( [ self.alpha_k, self.p, self.pi, self.sigma_k, self.c, self.mu_new ] )
+            param = list( [ self.alpha_k, self.sigma_k, self.c, self.mu_new ] ) # self.p, self.pi,
             optimizer_param = optim.Adam( param )
 
 
             for epoch in range(self.epocs):
                 optimizer_param.zero_grad()
 
-                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+                # print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
         
 
                 loss_final_prior = torch.tensor( np.array([0.0]) ).double()
@@ -540,7 +544,7 @@ class torchHHMnet(nn.Module):
 
                 optimizer_param.step()
 
-                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+                print("alpha_k ", self.alpha_k.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
         
 
 
