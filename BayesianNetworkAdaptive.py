@@ -407,7 +407,7 @@ class torchHHMnet(nn.Module):
 
 
 
-    def forward_pass(self, tr_x, tr_y, x_val, y_val, montecarlo_approx):
+    def forward_pass(self, tr_x, tr_y, x_val, y_val ):
 
         t = 0
         # call the initial model for initialization and so call the stack
@@ -418,23 +418,23 @@ class torchHHMnet(nn.Module):
 
         # set the previous value of mu, rho
         mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
-        self.mu_new       = nn.Parameter( mu_prev.clone().detach().zero_() ) # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
+        self.mu_new       = ( mu_prev.clone().detach().zero_() ) # ( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
 
         while t < (self.T):
 
             t = t+1
 
-            string = ["Time: "+ str(t), "\n"]
+            string = ["# Time: "+ str(t), "\n"]
             print(string)
 
             # the first time step does not depend
             
             # print( "alpha_k ", self.alpha_k )
             if t ==1:
-                self.alpha_k      = nn.Parameter( torch.tensor(0.0, dtype = torch.float64) )
+                self.alpha_k      = 0.0 # nn.Parameter( torch.tensor(0.0, dtype = torch.float64) )
 
             elif t==2:
-                self.alpha_k      = nn.Parameter( torch.tensor(self.alpha_k_user, dtype = torch.float64) )
+                self.alpha_k      = self.alpha_k_user # nn.Parameter( torch.tensor(self.alpha_k_user, dtype = torch.float64) )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
             
@@ -444,13 +444,8 @@ class torchHHMnet(nn.Module):
             x = tr_x[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
             y = tr_y[(t-1)*self.sliding:(t-1)*self.sliding + self.sample_size]
 
-            # idx = np.random.choice(range(0, self.sample_size), self.sample_size)
-
-            # x = x[idx]
-            # y = y[idx]
 
             tr_x_tensor = torch.tensor( x, dtype = torch.float64 )
-            # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
             tr_y_tensor = torch.tensor( y, dtype = torch.long )
 
             train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
@@ -459,7 +454,7 @@ class torchHHMnet(nn.Module):
             iterations = int( self.sample_size/self.minibatch_size ) 
 
             param_model = list(self.model_list[t].parameters())
-            param_model.remove( self.alpha_k )
+            # param_model.remove( self.alpha_k )
             # param_model.remove( self.p )
             # param_model.remove( self.pi )
             param_model.remove( self.sigma_k )
@@ -478,25 +473,18 @@ class torchHHMnet(nn.Module):
                 print(string)
 
                 for batch in train_loader:
-                    # self.model_list[t].zero_grad()
+                    self.model_list[t].zero_grad()
                     optimizer.zero_grad()
 
-                    loss_final = torch.tensor( np.array([0.0]) ).double()
+                    network_output      = self.model_list[t]( batch[0] )
+                    # print(batch[0])
+                    loss_network_output = self.loss_function( network_output, batch[1] )
+                    # print(batch[1].squeeze(1))
 
-                    for montecarlo in range(montecarlo_approx):
+                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior( self.mu_new, mu_prev, rho_prev)
 
-                        # print(self.sigma_k, self.c, self.p, self.pi)
+                    loss_final = loss_network_output + loss_prior
 
-                        network_output      = self.model_list[t]( batch[0] )
-                        # print(batch[0])
-                        loss_network_output = self.loss_function( network_output, batch[1] )
-                        # print(batch[1].squeeze(1))
-
-                        loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
-
-                        loss_final = loss_final + loss_network_output + loss_prior
-                    
-                    loss_final = ( 1/montecarlo_approx )*loss_final
                     loss_final.backward()
 
                     optimizer.step()
@@ -514,152 +502,133 @@ class torchHHMnet(nn.Module):
                 val_performance = sum( y_val == y_predicted )/len(y_val)
                 print("Performance: ", val_performance)
 
+            del initial_cond
             initial_cond = self.model_list[t]
 
             # Update new paramter
             # with torch.no_grad():
             #     self.alpha_k.copy_( torch.tensor(self.alpha_k_user).double() )
                 
-            param = list( [ self.alpha_k, self.sigma_k, self.c, self.mu_new ] ) # self.p, self.pi,
+            param = list( [ self.sigma_k, self.c ] ) # self.p, self.pi,
             optimizer_param = optim.Adam( param )
 
 
             for epoch in range(self.epocs):
                 optimizer_param.zero_grad()
 
-                # print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
-        
-
-                loss_final_prior = torch.tensor( np.array([0.0]) ).double()
-
-                for montecarlo in range(montecarlo_approx):
-
-                    network_output      = self.model_list[t]( batch[0] )
-                    loss_f_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
-
-                    loss_final_prior = loss_final_prior + loss_f_prior
+                network_output_param      = self.model_list[t]( batch[0] )
+                loss_f_prior_param = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
                 
-                loss_final_prior = ( 1/montecarlo_approx )*loss_final_prior
-                loss_final_prior.backward()
+                loss_f_prior_param.backward()
 
                 optimizer_param.step()
 
-                print("alpha_k ", self.alpha_k.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+                print("sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+
+            mu_t, rho_t, w_t = self.model_list[t].stack()
+            self.mu_new.copy_( 1/(1-self.alpha_k)*(mu_t - self.alpha_k*mu_prev) )
         
 
 
 
 
-    def online(self, tr_x, tr_y, x_val, y_val, steps, optimizer_choice):
+    def online(self, tr_x, tr_y, x_val, y_val, optimizer_choice):
 
         T_last = len(self.model_list)-1
         
         # call the initial model for initialization and so call the stack
         t = T_last
 
-        mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
+
+        if t==1:
+            self.alpha_k      = nn.Parameter( torch.tensor(self.alpha_k_user, dtype = torch.float64) )
+
+        mu_prev, rho_prev, w_prev = self.model_list[t].stack()
 
         initial_cond = self.model_list[t] 
 
-        while t < (T_last + steps):
+        new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
 
-            t = t+1
+        self.model_list.append(new_model)
 
-            string = ["Time: "+ str(t), "\n"]
+        t = t+1
+
+        x = tr_x
+        y = tr_y
+
+        tr_x_tensor = torch.tensor( x, dtype = torch.float64)
+        tr_y_tensor = torch.tensor( y, dtype = torch.long)
+
+        train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
+        train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)
+
+        iterations = int(self.sample_size/self.minibatch_size)
+
+        # optimizer = optimizer_choice(self.model_list[t].parameters())
+        param_model = list(self.model_list[t].parameters())
+        # param_model.remove( self.alpha_k )
+        # param_model.remove( self.p )
+        # param_model.remove( self.pi )
+        param_model.remove( self.sigma_k )
+        param_model.remove( self.c ) 
+
+        if optimizer_choice == "adam":    
+            optimizer =  optim.Adam( param_model )
+
+        else:    
+            optimizer   = optim.SGD( param_model, lr = optimizer_choice) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
+
+        # set the previous value of mu, rho
+
+        for epoch in range(self.epocs):
+
+            string = ["New epoch. "+str(epoch+1), "\n"]
             print(string)
 
-            # the first time step does not depend
-            # print( "alpha_k ", self.alpha_k )
+            for batch in train_loader:
+                self.model_list[t].zero_grad()
+                optimizer.zero_grad()
 
-            new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
+                network_output      = self.model_list[t]( batch[0] )
+                loss_network_output = self.loss_function( network_output, batch[1] )
 
-            self.model_list.append(new_model)
-            # initial_cond.zero_grad()
+                loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
 
-            x = tr_x[(t-T_last-1)*self.sliding:(t-T_last-1)*self.sliding + self.sample_size]
-            y = tr_y[(t-T_last-1)*self.sliding:(t-T_last-1)*self.sliding + self.sample_size]
+                loss_final = loss_network_output + loss_prior
+                print("here")
+                loss_final.backward()
 
-            # idx = np.random.choice(range(0, self.sample_size), self.sample_size)
+                optimizer.step()
 
-            # x = x[idx]
-            # y = y[idx]
+            print("Prior ", loss_prior.data.numpy(), ". Loss ", loss_network_output.data.numpy())
 
-            tr_x_tensor = torch.tensor( x, dtype = torch.float64)
-            # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
-            tr_y_tensor = torch.tensor( y, dtype = torch.long)
+            y_predicted     = np.zeros(len(y_val))
+            val_performance =0
 
-            train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
-            train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)
+            output           = self.model_list[t].performance( torch.tensor( x_val ).double() )
+            output_softmax   = F.softmax(output, dim=1)
 
-            iterations = int(self.sample_size/self.minibatch_size)
+            y_predicted = np.array( range(0, 10) )[ np.argmax( output_softmax.data.numpy(), 1 ) ]
 
-            # optimizer = optimizer_choice(self.model_list[t].parameters())
-            if optimizer_choice == "adam":    
-                optimizer =  optim.Adam(self.model_list[t].parameters())
-
-            else:    
-                optimizer   = optim.SGD( self.model_list[t].parameters(), lr = optimizer_choice) # (1e-2)*(t==1) + (1e-3)*(t!=1) )
- 
-            # set the previous value of mu, rho
-
-            for epoch in range(self.epocs):
-
-                string = ["New epoch. "+str(epoch+1), "\n"]
-                print(string)
-
-                for batch in train_loader:
-                    # self.model_list[t].zero_grad()
-                    optimizer.zero_grad()
-
-                    network_output      = self.model_list[t]( batch[0] )
-                    # print(batch[0])
-                    loss_network_output = self.loss_function( network_output, batch[1] )
-                    # print(batch[1].squeeze(1))
-
-                    loss_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
-
-                    loss_final = loss_network_output + loss_prior
-
-                    loss_final.backward()
-
-                    optimizer.step()
-
-                print("Prior ", loss_prior.data.numpy(), ". Loss ", loss_network_output.data.numpy())
-
-                y_predicted     = np.zeros(len(y_val))
-                val_performance =0
-
-                output           = self.model_list[t].performance( torch.tensor( x_val ).double() )
-                output_softmax   = F.softmax(output, dim=1)
-
-                y_predicted = np.array( range(0, 10) )[ np.argmax( output_softmax.data.numpy(), 1 ) ]
-
-                val_performance = sum(y_val == y_predicted)/len(y_val)
-                print("Performance: ", val_performance)
-
-            initial_cond = self.model_list[t]        
-
-            loss_final_prior = torch.tensor( np.array([0.0]) ).double()
-
-            for epoch in range(self.epocs):
-                optimizer_param.zero_grad()
-
-                for montecarlo in range(montecarlo_approx):
-
-                    network_output      = self.model_list[t]( batch[0] )
-                    loss_f_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(mu_new, mu_prev, rho_prev)
-
-                    loss_final_prior = loss_final_prior + loss_f_prior
-                
-                loss_final_prior = ( 1/montecarlo_approx )*loss_final_prior
-                loss_final_prior.backward()
-
-                optimizer_param.step()
-
-                print("alpha_k ", self.alpha_k.data.numpy(), ". p ", self.p.data.numpy(), "pi ", self.pi.data.numpy(), ". mu_new ", self.mu_new.data.numpy(), "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+            val_performance = sum(y_val == y_predicted)/len(y_val)
+            print("Performance: ", val_performance)   
         
+        param = list( [ self.sigma_k, self.c ] ) # self.p, self.pi,
+        optimizer_param = optim.Adam( param )
 
-            mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
+        for epoch in range(self.epocs):
+            optimizer_param.zero_grad()
+
+            network_output      = self.model_list[t]( batch[0] )
+            loss_final_prior = (1/iterations)*self.model_list[t].get_gaussiandistancefromprior(self.mu_new, mu_prev, rho_prev)
+            loss_final_prior.backward()
+
+            optimizer_param.step()
+
+            print( "sigma_k ", self.sigma_k.data.numpy(), ". c ", self.c.data.numpy())
+
+        mu_t, rho_t, w_t = self.model_list[t].stack()
+        self.mu_new.copy_( 1/(1-self.alpha_k)*(mu_t - self.alpha_k*mu_prev) )
 
 
 

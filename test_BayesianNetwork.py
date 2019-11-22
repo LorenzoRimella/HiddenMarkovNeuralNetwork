@@ -1,4 +1,4 @@
-from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian, BayesianNetwork
+from BayesianNetwork import muParameter, rhoParameter, LinearBayesianGaussian, BayesianNetwork, torchHHMnet
 from different_prior_computation import first_likelihood
 
 import torch
@@ -671,4 +671,48 @@ def test_evolution():
     
 
 
+
+def test_forward_pass_muclone():
+
+    architecture = np.array([10, 10, 10, 10])
+
+    p       = 0.3
+    pi      = 0.5
+    alpha_k = 0.5
+    sigma_k = np.exp(0)
+    c       = np.exp(7)
+
+    sample_size    = 100
+    minibatch_size = 32
+    epocs          = 1
+
+    sliding = 10
+    T = 1
+
+    loss_function = F.cross_entropy
+
+    HMMNET = torchHHMnet( architecture, alpha_k, sigma_k, c, pi, p, loss_function,
+                          sample_size, minibatch_size, epocs, 
+                          T, sliding,
+                          workers = 1 )
+
+    x = np.random.uniform( 0, 5, (20, 10) )
+    y = np.random.choice( range(0, 10), 20 )
+
+    x_val = x[0:10]
+    y_val = y[0:10]
+
+    tr_x = x[10:]
+    tr_y = y[10:]
+
+
+    HMMNET.forward_pass(tr_x, tr_y, x_val, y_val, 1e-3)
+
+    mu_prev, rho_prev, _ = HMMNET.model_list[0].stack()
+    mu_control1 = mu_prev.clone().detach()
+
+    mu_prev, rho_prev, _ = HMMNET.model_list[1].stack()
+    mu_control2 = mu_prev.clone().detach()
+
+    assert (mu_control1.data.numpy() != mu_control2.data.numpy()).any()
 
