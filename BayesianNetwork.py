@@ -51,12 +51,12 @@ class rhoParameter(nn.Module):
         self.out_features = out_features
 
         if rhoParameter_init == False:
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -5, -4, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform( -8, -7, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -8, -7, (out_features             ) ), dtype=torch.float64 ) )
 
         elif rhoParameter_init == "initial":
-            self.weight = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features, in_features) ), dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( 1, 1, (out_features             ) ), dtype=torch.float64 ) )
+            self.weight = nn.Parameter( torch.tensor( np.random.uniform(  -8, -7, (out_features, in_features) ), dtype=torch.float64 ) )
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform(  -8, -7, (out_features             ) ), dtype=torch.float64 ) )
 
         else:
             self.weight = nn.Parameter( rhoParameter_init.weight.clone().detach() )
@@ -382,7 +382,6 @@ class torchHHMnet(nn.Module):
         self.architecture  = architecture
         self.depth         = self.architecture.shape[0]
 
-        self.alpha_k_user = alpha_k
         self.alpha_k      = alpha_k
 
         self.sigma_k = sigma_k
@@ -430,8 +429,6 @@ class torchHHMnet(nn.Module):
             string = ["Time: "+ str(t), "\n"]
             print(string)
 
-            # the first time step does not depend
-            self.alpha_k = ( self.alpha_k_user )*( t > 1 )
             # print( "alpha_k ", self.alpha_k )
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
@@ -536,9 +533,9 @@ class torchHHMnet(nn.Module):
         x = tr_x
         y = tr_y
 
-        tr_x_tensor = torch.tensor( x, dtype = torch.float64)
+        tr_x_tensor = torch.tensor( x, dtype = torch.float64 )
         # tr_y_tensor = torch.tensor(np.reshape(y, (np.size(y), 1)), dtype = torch.long)
-        tr_y_tensor = torch.tensor( y, dtype = torch.long)
+        tr_y_tensor = torch.tensor( y, dtype = torch.long )
 
         train = data.TensorDataset(tr_x_tensor, tr_y_tensor)
         train_loader = data.DataLoader(train, batch_size= self.minibatch_size, shuffle=True, num_workers= self.workers)
