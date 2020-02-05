@@ -262,9 +262,6 @@ class BayesianNetwork(nn.Module):
         overall = self.pi*p*(f1) + self.pi*(1-p)*(f2) + (1-self.pi)*p*(f3) + (1-self.pi)*(1-p)*(f4)
         summing = (torch.log(overall))
 
-        # print("new")
-        # print(f1.sum(), f2.sum(), f3.sum(), f4.sum())
-
         return summing
 
 
@@ -288,9 +285,6 @@ class BayesianNetwork(nn.Module):
 
         mu, rho, w = self.stack()
 
-        # print("new weight")
-        # print(w)
-
         sigma = torch.log1p( torch.exp( rho ) )
 
         split = (self.architecture[self.depth-2]*self.architecture[self.depth-1]+self.architecture[self.depth-1])
@@ -300,8 +294,6 @@ class BayesianNetwork(nn.Module):
         rho_last = rho[-split:]
         sigma_last = sigma[-split:]
 
-        # print(w_last)
-
         w_bef   = w[  0:(len(w)-split)]
         mu_bef  = mu[ 0:(len(w)-split)]
         rho_bef = rho[0:(len(w)-split)]
@@ -310,14 +302,10 @@ class BayesianNetwork(nn.Module):
         log_qw_theta_last = self.get_gaussianloglikelihood_qw(w_last, mu_last, sigma_last, p = 1)
         log_qw_theta_sum_last = (log_qw_theta_last).sum()
 
-        # print("primo ", log_qw_theta_sum_last)
-
         log_qw_theta_bef = self.get_gaussianloglikelihood_qw(w_bef, mu_bef, sigma_bef, self.p)
         log_qw_theta_sum_bef = (log_qw_theta_bef).sum()
 
         log_qw_theta_sum = log_qw_theta_sum_last + log_qw_theta_sum_bef
-
-        # print("secondo ", log_qw_theta_sum_bef)
 
         sigma_prev = torch.log1p( torch.exp( rho_prev ) )
 
@@ -338,17 +326,10 @@ class BayesianNetwork(nn.Module):
         log_pw_last     = self.get_gaussianlogkernelprior( w_last , mu_prev_last , sigma_prev_last , mu_new_last, p = 1)
         log_pw_sum_last = (log_pw_last).sum()
 
-        # print("terzo ", log_pw_sum_last)
-
         log_pw_bef     = self.get_gaussianlogkernelprior( w_bef, mu_prev_bef, sigma_prev_bef, mu_new_bef, self.p)
         log_pw_sum_bef = (log_pw_bef).sum()
 
-        # print("quarto ", log_pw_sum_bef)
-
         log_pw_sum = log_pw_sum_last + log_pw_sum_bef
-
-        # print( "new" )
-        # print("quinto ", log_qw_theta_sum.data.numpy(), log_pw_sum.data.numpy())
 
         return (log_qw_theta_sum - log_pw_sum)
 
@@ -390,7 +371,6 @@ class torchHHMnet(nn.Module):
         self.p       = p
         self.c       = c
 
-        # self.optimizer_choice = optimizer_choice
         self.loss_function    = loss_function
 
         self.sample_size      = sample_size
@@ -415,22 +395,23 @@ class torchHHMnet(nn.Module):
         t = 0
 
         ############################################################################
-        title = "HMMNETcheck-grid-mu0-alpha:"+str(self.alpha_k)
-        title = title+"-p:"+str(self.p)
-        title = title+"-pi:"+str(self.pi)
-        title = title+"-sigma:"+str(self.sigma_k)
-        title = title+"-c:"+str(self.c)
+        # Uncomment this if you want to use a separate file to store the print
+        # title = "HMMNETcheck-grid-mu0-alpha:"+str(self.alpha_k)
+        # title = title+"-p:"+str(self.p)
+        # title = title+"-pi:"+str(self.pi)
+        # title = title+"-sigma:"+str(self.sigma_k)
+        # title = title+"-c:"+str(self.c)
 
-        title = title+"-sample_size:"+str(self.sample_size)
-        title = title+"-sliding"+str(self.sliding)
-        title = title+"-minibatch:"+str(self.minibatch_size)
-        title = title+"-epochs:"+str(self.epocs)
-        title = title+"-T:"+str(self.T)
-        title = title+"-lr:"+str(lr_choice)
+        # title = title+"-sample_size:"+str(self.sample_size)
+        # title = title+"-sliding"+str(self.sliding)
+        # title = title+"-minibatch:"+str(self.minibatch_size)
+        # title = title+"-epochs:"+str(self.epocs)
+        # title = title+"-T:"+str(self.T)
+        # title = title+"-lr:"+str(lr_choice)
 
-        f= open(title,"a")
-        f.close()
-	############################################################################
+        # f= open(title,"a")
+        # f.close()
+	    ############################################################################
 
         # call the initial model for initialization and so call the stack
         call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
@@ -444,10 +425,12 @@ class torchHHMnet(nn.Module):
 
             t = t+1
 
-            string = ["Time: "+ str(t), "\n"]
-            f= open(title,"a")
-            f.writelines(string)
-            f.close()
+            # Uncomment this if you want to use a separate file to store the print
+            # string = ["Time: "+ str(t), "\n"]
+            # f= open(title,"a")
+            # f.writelines(string)
+            # f.close()
+            print("Time ", t)
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
 
@@ -472,7 +455,9 @@ class torchHHMnet(nn.Module):
 
             for epoch in range(self.epocs):
 
-                string = ["New epoch. "+str(epoch+1), "\n"]
+                # Uncomment this if you want to use a separate file to store the print
+                # string = ["New epoch. "+str(epoch+1), "\n"]
+                print("Epoch ", epoch+1)
 
                 for batch in train_loader:
                     # self.model_list[t].zero_grad()
@@ -495,10 +480,14 @@ class torchHHMnet(nn.Module):
 
                     optimizer.step()
 
-                string = ["Prior "+ str(loss_prior.data.numpy()) + ". Loss "+ str(loss_network_output.data.numpy()), "\n"]
-                f= open(title,"a")
-                f.writelines(string)
-                f.close()
+                # Uncomment this if you want to use a separate file to store the print
+                # string = ["Prior "+ str(loss_prior.data.numpy()) + ". Loss "+ str(loss_network_output.data.numpy()), "\n"]
+                # f= open(title,"a")
+                # f.writelines(string)
+                # f.close()
+
+                # Control at the end of the epoxh
+                print("Prior score ", loss_prior.data.numpy(), " and Data score ", loss_network_output.data.numpy())
 
                 y_predicted     = np.zeros(len(y_val))
                 val_performance =0
@@ -509,55 +498,58 @@ class torchHHMnet(nn.Module):
                 y_predicted = np.array( range(0, 10) )[ np.argmax( output_softmax.data.numpy(), 1 ) ]
 
                 val_performance = sum(y_val == y_predicted)/len(y_val)
-                string = ["Performance: "+ str(val_performance), "\n"]
-                f= open(title,"a")
-                f.writelines(string)
-                f.close()
+
+                # Uncomment this if you want to use a separate file to store the print
+                # string = ["Performance: "+ str(val_performance), "\n"]
+                # f= open(title,"a")
+                # f.writelines(string)
+                # f.close()
+                print("Performance on the validation set ", val_performance)
 
             initial_cond = self.model_list[t]
 
             ########################################################################
-            # Save the results
+            # Uncomment this to save the results in an external file
 
-            HMMNETtime        = {}
+            # HMMNETtime        = {}
 
-            for time in range(0,t+1):
+            # for time in range(0,t+1):
 
-                HMMNETdict        = {}
-                HMMNETdict['mu']  = {}
-                HMMNETdict['rho'] = {}
+            #     HMMNETdict        = {}
+            #     HMMNETdict['mu']  = {}
+            #     HMMNETdict['rho'] = {}
 
-                for i in range(0, self.depth-1):
-                    name1 = 'layer'+str(i+1)+'_weight'
-                    name2 = 'layer'+str(i+1)+'_bias'
+            #     for i in range(0, self.depth-1):
+            #         name1 = 'layer'+str(i+1)+'_weight'
+            #         name2 = 'layer'+str(i+1)+'_bias'
 
-                    HMMNETdict['mu'][name1]  = self.model_list[time].Linear_layer[i].mu.weight.data.numpy()
-                    HMMNETdict['mu'][name2]  = self.model_list[time].Linear_layer[i].mu.bias.data.numpy()
+            #         HMMNETdict['mu'][name1]  = self.model_list[time].Linear_layer[i].mu.weight.data.numpy()
+            #         HMMNETdict['mu'][name2]  = self.model_list[time].Linear_layer[i].mu.bias.data.numpy()
 
-                    HMMNETdict['rho'][name1] = self.model_list[time].Linear_layer[i].rho.weight.data.numpy()
-                    HMMNETdict['rho'][name2]  = self.model_list[time].Linear_layer[i].rho.bias.data.numpy()
+            #         HMMNETdict['rho'][name1] = self.model_list[time].Linear_layer[i].rho.weight.data.numpy()
+            #         HMMNETdict['rho'][name2]  = self.model_list[time].Linear_layer[i].rho.bias.data.numpy()
 
-                HMMNETtime[str(time)] = HMMNETdict
+            #     HMMNETtime[str(time)] = HMMNETdict
 
 
-            title1 = "HMMNETdata-grid-mu0-alpha"+str(self.alpha_k)
-            title1 = title1+"-p"+str(self.p)
-            title1 = title1+"-pi"+str(self.pi)
-            title1 = title1+"-sigma"+str(self.sigma_k)
-            title1 = title1+"-c"+str(self.c)
+            # title1 = "HMMNETdata-grid-mu0-alpha"+str(self.alpha_k)
+            # title1 = title1+"-p"+str(self.p)
+            # title1 = title1+"-pi"+str(self.pi)
+            # title1 = title1+"-sigma"+str(self.sigma_k)
+            # title1 = title1+"-c"+str(self.c)
 
-            title1 = title1+"-sample_size"+str(self.sample_size)
-            title1 = title1+"-sliding"+str(self.sliding)
-            title1 = title1+"-minibatch"+str(self.minibatch_size)
-            title1 = title1+"-epochs"+str(self.epocs)
-            title1 = title1+"-T"+str(self.T)
-            title1 = title1+"-lr:"+str(lr_choice)
+            # title1 = title1+"-sample_size"+str(self.sample_size)
+            # title1 = title1+"-sliding"+str(self.sliding)
+            # title1 = title1+"-minibatch"+str(self.minibatch_size)
+            # title1 = title1+"-epochs"+str(self.epocs)
+            # title1 = title1+"-T"+str(self.T)
+            # title1 = title1+"-lr:"+str(lr_choice)
 
-            HMM = open(title1,"wb")
-            pickle.dump(HMMNETtime,HMM)
-            HMM.close()
+            # HMM = open(title1,"wb")
+            # pickle.dump(HMMNETtime,HMM)
+            # HMM.close()
 
-            del HMMNETtime
+            # del HMMNETtime
             ########################################################################
 
 
