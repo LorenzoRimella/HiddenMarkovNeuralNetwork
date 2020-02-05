@@ -30,7 +30,7 @@ class muParameter(nn.Module):
 
         elif muParameter_init == "initial":
             self.weight = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features, in_features) ),  dtype=torch.float64 ) )
-            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features             ) ), dtype=torch.float64 ) )           
+            self.bias   = nn.Parameter( torch.tensor( np.random.uniform( -0.0, +0.0, (out_features             ) ), dtype=torch.float64 ) )
 
         else:
             self.weight = nn.Parameter( muParameter_init.weight.clone().detach() )
@@ -69,7 +69,7 @@ class rhoParameter(nn.Module):
         rho_stack = torch.cat( ( self.weight.view( self.in_features*self.out_features ), self.bias.view( self.out_features ) ), dim=0 )
 
         return rho_stack
-        
+
 
 
 ##############################################################################################
@@ -86,11 +86,11 @@ class Gaussian_dropconnect(object):
 
         self.normal    = torch.distributions.Normal(0,1)
         self.bernoulli = torch.distributions.bernoulli.Bernoulli(self.p)
-    
+
     @property
     def sigma(self):
         return torch.log1p(torch.exp(self.rho))
-    
+
     def sample(self):
         epsilon = self.normal.sample(self.rho.size())
         mask    = self.bernoulli.sample(self.mu.size())
@@ -125,7 +125,7 @@ class LinearBayesianGaussian(nn.Module):
             self.rho = rhoParameter(in_features, out_features, LinearBayesianGaussian_init.rho)
 
         self.w_weight_rv = Gaussian_dropconnect( self.mu.weight, self.rho.weight, self.p )
-        self.w_bias_rv   = Gaussian_dropconnect( self.mu.bias  , self.rho.bias,   self.p )     
+        self.w_bias_rv   = Gaussian_dropconnect( self.mu.bias  , self.rho.bias,   self.p )
 
 
     def forward(self, input):
@@ -186,7 +186,7 @@ class BayesianNetwork(nn.Module):
             for layer in range(self.depth-2):
                 self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer], self.architecture[layer+1], "initial", p = self.p) )
 
-            self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer+1], self.architecture[layer+2], "initial", p = 1) )           
+            self.Linear_layer.append( LinearBayesianGaussian( self.architecture[layer+1], self.architecture[layer+2], "initial", p = 1) )
 
         else:
             for layer in range(self.depth-2):
@@ -327,8 +327,8 @@ class BayesianNetwork(nn.Module):
         # if alpha_k is zero then set to zero also the prev mu: in this case we do not learn sequentially
         if self.alpha_k == 0:
             with torch.no_grad():
-                mu_prev.data.zero_() 
-                mu_new.data.zero_() 
+                mu_prev.data.zero_()
+                mu_new.data.zero_()
 
         mu_prev_last = mu_prev[-split:]
         mu_new_last  = mu_new[-split:]
@@ -416,23 +416,24 @@ class torchHHMnet(nn.Module):
     def forward_pass(self, tr_x, tr_y, lr):
 
         t = 0
-        
-        ############################################################################
-        title = "HMMNETFLAGcheck-alpha:"+str(self.alpha_k)
-        title = title+"-p:"+str(self.p)
-        title = title+"-pi:"+str(self.pi)
-        title = title+"-sigma:"+str(self.sigma_k) 
-        title = title+"-c:"+str(self.c)
-   
-        title = title+"-sample_size:"+str(self.sample_size) 
-        title = title+"-sliding"+str(self.sliding)    
-        title = title+"-minibatch:"+str(self.minibatch_size) 
-        title = title+"-epochs:"+str(self.epocs)     
-        title = title+"-T:"+str(self.T)          
-   
-        f= open(title,"a")
-        f.close()
-	############################################################################
+
+        #############################################################################
+        # Uncomment this if you want to print progress on a different file
+        # title = "HMMNETFLAGcheck-alpha:"+str(self.alpha_k)
+        # title = title+"-p:"+str(self.p)
+        # title = title+"-pi:"+str(self.pi)
+        # title = title+"-sigma:"+str(self.sigma_k)
+        # title = title+"-c:"+str(self.c)
+
+        # title = title+"-sample_size:"+str(self.sample_size)
+        # title = title+"-sliding"+str(self.sliding)
+        # title = title+"-minibatch:"+str(self.minibatch_size)
+        # title = title+"-epochs:"+str(self.epocs)
+        # title = title+"-T:"+str(self.T)
+
+        # f= open(title,"a")
+        # f.close()
+	    ############################################################################
 
         # call the initial model for initialization and so call the stack
         call = self.model_list[t]( torch.tensor(tr_x[0, :], dtype = torch.float64) )
@@ -444,55 +445,56 @@ class torchHHMnet(nn.Module):
 
             t = t+1
 
-            if t%2==0 or t==2:
+            ########################################################################
+            # Uncomment this if you want to progressively save the results
+            # if t%10==0 or t==2:
+
+            #     HMMNETtime        = {}
+
+            #     for time in range(0, t):
+
+            #         HMMNETdict        = {}
+            #         HMMNETdict['mu']  = {}
+            #         HMMNETdict['rho'] = {}
+
+            #         for i in range(0, self.depth-1):
+            #             name1 = 'layer'+str(i+1)+'_weight'
+            #             name2 = 'layer'+str(i+1)+'_bias'
+
+            #             HMMNETdict['mu'][name1]  = self.model_list[time].Linear_layer[i].mu.weight.data.numpy()
+            #             HMMNETdict['mu'][name2]  = self.model_list[time].Linear_layer[i].mu.bias.data.numpy()
+
+            #             HMMNETdict['rho'][name1] = self.model_list[time].Linear_layer[i].rho.weight.data.numpy()
+            #             HMMNETdict['rho'][name2]  = self.model_list[time].Linear_layer[i].rho.bias.data.numpy()
+
+            #         HMMNETtime[str(time)] = HMMNETdict
+
+
+            #     title1 = "HMMNETFLAGdata-alpha"+str(self.alpha_k)
+            #     title1 = title1+"-p"+str(self.p)
+            #     title1 = title1+"-pi"+str(self.pi)
+            #     title1 = title1+"-sigma"+str(self.sigma_k)
+            #     title1 = title1+"-c"+str(self.c)
+
+            #     title1 = title1+"-sample_size"+str(self.sample_size)
+            #     title1 = title1+"-sliding"+str(self.sliding)
+            #     title1 = title1+"-minibatch"+str(self.minibatch_size)
+            #     title1 = title1+"-epochs"+str(self.epocs)
+            #     title1 = title1+"-T"+str(self.T)
+
+            #     HMM = open(title1,"wb")
+            #     pickle.dump(HMMNETtime,HMM)
+            #     HMM.close()
+
+            #     del HMMNETtime
                 ########################################################################
-                # Save the results
 
-                HMMNETtime        = {}
-
-                for time in range(0, t):
-
-                    HMMNETdict        = {}
-                    HMMNETdict['mu']  = {}
-                    HMMNETdict['rho'] = {}
-
-                    for i in range(0, self.depth-1):
-                        name1 = 'layer'+str(i+1)+'_weight'
-                        name2 = 'layer'+str(i+1)+'_bias'
-
-                        HMMNETdict['mu'][name1]  = self.model_list[time].Linear_layer[i].mu.weight.data.numpy()
-                        HMMNETdict['mu'][name2]  = self.model_list[time].Linear_layer[i].mu.bias.data.numpy()
-
-                        HMMNETdict['rho'][name1] = self.model_list[time].Linear_layer[i].rho.weight.data.numpy()
-                        HMMNETdict['rho'][name2]  = self.model_list[time].Linear_layer[i].rho.bias.data.numpy()
-
-                    HMMNETtime[str(time)] = HMMNETdict
-
-
-                title1 = "HMMNETFLAGdata-alpha"+str(self.alpha_k)
-                title1 = title1+"-p"+str(self.p)
-                title1 = title1+"-pi"+str(self.pi)
-                title1 = title1+"-sigma"+str(self.sigma_k) 
-                title1 = title1+"-c"+str(self.c)
-
-                title1 = title1+"-sample_size"+str(self.sample_size)  
-                title1 = title1+"-sliding"+str(self.sliding)     
-                title1 = title1+"-minibatch"+str(self.minibatch_size)
-                title1 = title1+"-epochs"+str(self.epocs)      
-                title1 = title1+"-T"+str(self.T)    
-
-                HMM = open(title1,"wb")
-                pickle.dump(HMMNETtime,HMM)
-                HMM.close()
-
-                del HMMNETtime
-                ########################################################################
-
-
-            string = ["Time: "+ str(t), "\n"]
-            f= open(title,"a")
-            f.writelines(string)
-            f.close()
+            # Uncomment this if you want to print progress on a different file
+            # string = ["Time: "+ str(t), "\n"]
+            # f= open(title,"a")
+            # f.writelines(string)
+            # f.close()
+            print("Time ", t)
 
             new_model = BayesianNetwork( self.architecture, self.alpha_k, self.sigma_k, self.c, self.pi, self.p, initial_cond )
 
@@ -512,11 +514,11 @@ class torchHHMnet(nn.Module):
             iterations = int(self.sample_size/self.minibatch_size)
 
             # optimizer = optimizer_choice(self.model_list[t].parameters())
-            if lr == "Adam":    
+            if lr == "Adam":
                 optimizer =  optim.Adam(self.model_list[t].parameters())
-            else:    
+            else:
                 optimizer   = optim.SGD( self.model_list[t].parameters(), lr = lr )
- 
+
             # set the previous value of mu, rho
             mu_prev, rho_prev, w_prev = self.model_list[t-1].stack()
             mu_new = mu_prev.clone().detach() #( ( 1 - 2*self.alpha_k )/( 1 - self.alpha_k ))*mu_prev.clone().detach() # 
@@ -524,8 +526,12 @@ class torchHHMnet(nn.Module):
 
             for epoch in range(self.epocs):
 
-                string = ["New epoch. "+str(epoch+1), "\n"]
-                print(string)
+                # Uncomment this if you want to print progress on a different file
+                # string = ["New epoch. "+str(epoch+1), "\n"]
+                # f= open(title,"a")
+                # f.writelines(string)
+                # f.close()
+                print("Epoch ", epoch+1)
 
                 for batch in train_loader:
                     # self.model_list[t].zero_grad()
@@ -542,11 +548,14 @@ class torchHHMnet(nn.Module):
 
                     optimizer.step()
 
-            string = ["Prior "+ str(loss_prior.data.numpy()) + ". Loss "+ str(loss_network_output.data.numpy()), "\n"]
-            f= open(title,"a")
-            f.writelines(string)
-            f.close()
+            # Uncomment this if you want to print progress on a different file
+            # string = ["Prior "+ str(loss_prior.data.numpy()) + ". Loss "+ str(loss_network_output.data.numpy()), "\n"]
+            # f= open(title,"a")
+            # f.writelines(string)
+            # f.close()
 
+            # Control at the end of the epoxh
+            print("Prior score ", loss_prior.data.numpy(), " and Data score ", loss_network_output.data.numpy())
 
             initial_cond = self.model_list[t]
 
