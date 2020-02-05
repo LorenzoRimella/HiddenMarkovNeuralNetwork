@@ -1,3 +1,5 @@
+https://www.cc.gatech.edu/cpl/projects/videotexture/SIGGRAPH2000/index.htm
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
