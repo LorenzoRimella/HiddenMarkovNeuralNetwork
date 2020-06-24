@@ -2,7 +2,7 @@
 
 An hybrid between HMM and Neural networks for sequential training and time series forecasting. In this repository we display some tutorials on how to use HMNN in different scenarios. 
 
-## Requirements for Tutorials
+## Requirements for the tutorials
 
 - FLAG-example. In "FLAG-example.ipynb" we explains how to run an HMNN for video frame prediction.
   You require the libraries:
